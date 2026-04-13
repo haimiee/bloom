@@ -3,33 +3,26 @@ from pydantic import BaseModel
 import sqlite3
 from datetime import datetime, date
 
-
 # app + config
-
 app = FastAPI()
 
 WATER_GOAL = 64
 DB_NAME = "database.db"
 
-
 # request / response models
-
 class WaterEntry(BaseModel):
     amount: int
-
+    userid: int
 
 class MoodEntry(BaseModel):
     mood: str
-    text: str | None = None
-
+    userid: int
 
 # database connection helpers
-
 def get_connection():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
-
 
 def init_db():
     conn = get_connection()
@@ -38,6 +31,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS water_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            userid INTEGER NOT NULL,
             amount INTEGER NOT NULL,
             created_at TEXT NOT NULL
         )
@@ -46,6 +40,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS mood_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            userid INTEGER NOT NULL,
             mood TEXT NOT NULL,
             text TEXT,
             created_at TEXT NOT NULL
@@ -55,19 +50,15 @@ def init_db():
     conn.commit()
     conn.close()
 
-
 init_db()
 
-
 # utility helpers
-
 def get_day_string(selected_date: str | None = None):
     """
     if no date is passed in, use today's date.
     date format expected: YYYY-MM-DD
     """
     return selected_date if selected_date else date.today().isoformat()
-
 
 def get_plant_stage(percentage: float):
     """
@@ -84,29 +75,26 @@ def get_plant_stage(percentage: float):
         return 1
     return 0
 
-
 # water queries / logic
-
-def create_water_log(amount: int):
+def create_water_log(amount: int, userid: int):
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        "INSERT INTO water_logs (amount, created_at) VALUES (?, ?)",
-        (amount, datetime.utcnow().isoformat())
+        "INSERT INTO water_logs (amount, userid, created_at) VALUES (?, ?, ?)",
+        (amount, userid, datetime.utcnow().isoformat())
     )
 
     conn.commit()
     conn.close()
 
-
-def get_water_logs_for_day(day_string: str):
+def get_water_logs_for_day(day_string: str, userid: int):
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT id, amount, created_at FROM water_logs WHERE created_at LIKE ? ORDER BY created_at",
-        (f"{day_string}%",)
+        "SELECT id, amount,  created_at FROM water_logs WHERE created_at LIKE ? AND userid = ? ORDER BY created_at",
+        (f"{day_string}%", userid)
     )
 
     rows = cursor.fetchall()
@@ -114,44 +102,41 @@ def get_water_logs_for_day(day_string: str):
 
     return [dict(row) for row in rows]
 
-
-def get_water_summary_for_day(day_string: str):
-    logs = get_water_logs_for_day(day_string)
+def get_water_summary_for_day(day_string: str, userid: int):
+    logs = get_water_logs_for_day(day_string, userid)
     total = sum(log["amount"] for log in logs)
     percentage = total / WATER_GOAL if WATER_GOAL else 0
 
     return {
+        "userid": userid,
         "date": day_string,
         "goal": WATER_GOAL,
         "amount_logged": total,
         "percentage": percentage,
         "plant_stage": get_plant_stage(percentage),
-        "water_logs": logs
+        "water_logs": logs        
     }
 
-
 # mood queries / logic
-
-def create_mood_log(mood: str, text: str | None):
+def create_mood_log(mood: str, text: str | None, userid: int):
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        "INSERT INTO mood_logs (mood, text, created_at) VALUES (?, ?, ?)",
-        (mood, text, datetime.utcnow().isoformat())
+        "INSERT INTO mood_logs (userid, mood, text, created_at) VALUES (?, ?, ?, ?)",
+        (userid, mood, text, datetime.utcnow().isoformat())
     )
 
     conn.commit()
     conn.close()
 
-
-def get_mood_logs_for_day(day_string: str):
+def get_mood_logs_for_day(day_string: str, userid: int):
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT id, mood, text, created_at FROM mood_logs WHERE created_at LIKE ? ORDER BY created_at",
-        (f"{day_string}%",)
+        "SELECT id, mood, text, created_at FROM mood_logs WHERE created_at LIKE ? AND userid = ? ORDER BY created_at",
+        (f"{day_string}%", userid)
     )
 
     rows = cursor.fetchall()
@@ -159,14 +144,13 @@ def get_mood_logs_for_day(day_string: str):
 
     return [dict(row) for row in rows]
 
-
 # combined summary logic
-
-def get_daily_summary(day_string: str):
-    water_summary = get_water_summary_for_day(day_string)
-    moods = get_mood_logs_for_day(day_string)
+def get_daily_summary(day_string: str, userid: int):
+    water_summary = get_water_summary_for_day(day_string, userid)
+    moods = get_mood_logs_for_day(day_string, userid)
 
     return {
+        "userid": userid,
         "date": day_string,
         "goal": water_summary["goal"],
         "amount_logged": water_summary["amount_logged"],
@@ -177,49 +161,48 @@ def get_daily_summary(day_string: str):
         "moods": moods
     }
 
-
 # routes
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 @app.post("/water")
 def log_water(entry: WaterEntry):
-    create_water_log(entry.amount)
+    create_water_log(entry.amount, entry.userid)
 
     day_string = get_day_string()
     return {
         "status": "logged",
         "amount": entry.amount,
-        "summary": get_daily_summary(day_string)
+        "summary": get_daily_summary(day_string, entry.userid)
     }
 
 @app.get("/water")
-def get_water(date_str: str | None = Query(default=None, alias="date")):
+def get_water(userid: int, date_str: str | None = Query(default=None, alias="date")):
     day_string = get_day_string(date_str)
-    return get_water_summary_for_day(day_string)
+    return get_water_summary_for_day(day_string, userid)
 
 @app.post("/mood")
 def log_mood(entry: MoodEntry):
-    create_mood_log(entry.mood, entry.text)
+    create_mood_log(entry.mood, entry.text, entry.userid)
 
     day_string = get_day_string()
     return {
         "status": "logged",
         "mood": entry.mood,
-        "summary": get_daily_summary(day_string)
+        "summary": get_daily_summary(day_string, entry.userid)
     }
 
 @app.get("/moods")
-def get_moods(date_str: str | None = Query(default=None, alias="date")):
+def get_moods(userid: int, date_str: str | None = Query(default=None, alias="date")):
     day_string = get_day_string(date_str)
     return {
+        "userid": userid,
         "date": day_string,
-        "moods": get_mood_logs_for_day(day_string)
+        "moods": get_mood_logs_for_day(day_string, userid)
     }
 
 @app.get("/summary")
-def summary(date_str: str | None = Query(default=None, alias="date")):
+def summary(userid: int, date_str: str | None = Query(default=None, alias="date")):
     day_string = get_day_string(date_str)
-    return get_daily_summary(day_string)
+    return get_daily_summary(day_string, userid)
