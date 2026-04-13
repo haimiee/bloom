@@ -44,7 +44,7 @@ Later on, we may expand into:
 
 ---
 
-## Running the project locally
+## Running the project
 
 ### 1. clone the repo
 
@@ -62,8 +62,76 @@ frontend should run on:
 ```http://localhost:5173```
 
 ### 3. backend setup
+#### installing requirements
 ```bash
 cd ../backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
+
+#### testing databases
+run the backend locally in terminal with:
+ `python -m uvicorn app.main:app --reload`
+open Swagger UI in browser at `http://127.0.0.1:8000/docs`
+This opens the FastAPI docs page where you can test endpoints and view JSON responses.
+
+shared/live deployed backend: `http://172.233.163.115:8000/docs`
+this version is running on the remote server and can be used for shared testing across devices
+
+note: 
+- local backend uses your own local database.db
+- live backend uses the shared server database.db
+- if testing on the live backend, data will be shared across users/devices
+
+#### current endpoints
+##### POST /water
+Logs water for a specific user.
+```JSON
+{
+"amount": 8,
+"userid": 1
+}
+```
+
+##### GET /water
+Gets water summary for a specific user.
+
+Example:
+`/water?userid=1`
+
+Optional with date:
+`/water?userid=1&date=2026-04-13`
+
+##### POST /mood
+Logs mood for a specific user.
+```JSON
+{
+"mood": "happy",
+"text": "good day",
+"userid": 1
+}
+```
+
+#### GET /moods
+Gets moods for a specific user
+
+Example:
+`/moods?userid=1`
+
+Optional with date:
+`/moods?userid=1&date=2026-04-13`
+
+##### GET /summary
+Gets combined daily summary for a specific user.
+
+Example:
+`/summary?userid=1`
+
+Optional with date:
+`/summary?userid=1&date=2026-04-13`
+
+##### GET /health
+Simple check to confirm backend is running.
+
+Example:
+`/health`
