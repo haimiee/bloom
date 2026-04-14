@@ -495,6 +495,12 @@
   margin-bottom: 22px;
 }
 
+.tracker-header > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .tracker-header h1 {
   margin: 0;
   font-size: clamp(1.2rem, 2.2vw, 1.9rem);
@@ -510,6 +516,26 @@
 
 .tracker-card h2 {
   margin: 0 0 8px;
+}
+
+.tracker-toolbar {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.tracker-toolbar label {
+  font-weight: 700;
+}
+
+.tracker-toolbar input[type='date'] {
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  min-height: 38px;
+  padding: 0 10px;
+  font-family: 'Space Mono', 'Consolas', monospace;
 }
 
 .tracker-grid {
@@ -532,6 +558,38 @@
 .tracker-grid p {
   margin: 0;
   line-height: 1.5;
+}
+
+.water-log-list {
+  margin-top: 16px;
+  background: color-mix(in srgb, var(--paper) 84%, white);
+  border: var(--soft-border);
+  padding: 14px;
+}
+
+.water-log-list h3 {
+  margin: 0 0 10px;
+}
+
+.water-log-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.water-log-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px dashed rgba(5, 26, 53, 0.35);
+  padding: 8px 10px;
+  background: #f8faf7;
+}
+
+.water-log-list p {
+  margin: 0;
 }
 
 @media (max-width: 1020px) {

@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 type AuthFieldErrors = {
@@ -15,11 +15,36 @@ type AuthResponse = {
   [key: string]: unknown
 }
 
+type WaterLog = {
+  id: number
+  amount: number
+  created_at: string
+}
+
+type WaterSummaryResponse = {
+  userid: number
+  date: string
+  goal: number
+  amount_logged: number
+  percentage: number
+  plant_stage: number
+  water_logs: WaterLog[]
+}
+
 type Page = 'landing' | 'signup' | 'login' | 'tracker'
+
+type AuthUser = {
+  userid: number
+  name: string
+  email: string
+}
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 const SIGNUP_ENDPOINT = import.meta.env.VITE_SIGNUP_ENDPOINT ?? '/auth/signup'
 const LOGIN_ENDPOINT = import.meta.env.VITE_LOGIN_ENDPOINT ?? '/auth/login'
+const WATER_ENDPOINT = import.meta.env.VITE_WATER_ENDPOINT ?? '/water'
+const AUTH_COOKIE_NAME = 'bloom_auth_user'
+const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24
 
 function getApiUrl(endpoint: string) {
   if (/^https?:\/\//i.test(endpoint)) {
@@ -86,9 +111,50 @@ async function parseResponse(response: Response) {
   }
 }
 
+function getCookieValue(name: string) {
+  const pattern = `; ${document.cookie}`
+  const segments = pattern.split(`; ${name}=`)
+  if (segments.length === 2) {
+    return segments.pop()?.split(';').shift() ?? null
+  }
+  return null
+}
+
+function saveAuthUserCookie(user: AuthUser) {
+  const serialized = encodeURIComponent(JSON.stringify(user))
+  document.cookie = `${AUTH_COOKIE_NAME}=${serialized}; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax`
+}
+
+function clearAuthUserCookie() {
+  document.cookie = `${AUTH_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`
+}
+
+function loadAuthUserFromCookie(): AuthUser | null {
+  const rawCookie = getCookieValue(AUTH_COOKIE_NAME)
+  if (!rawCookie) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(rawCookie)) as AuthUser
+    if (
+      typeof parsed.userid === 'number' &&
+      parsed.userid > 0 &&
+      typeof parsed.name === 'string' &&
+      typeof parsed.email === 'string'
+    ) {
+      return parsed
+    }
+  } catch {
+    clearAuthUserCookie()
+  }
+
+  return null
+}
+
 function App() {
-  const [page, setPage] = useState<Page>('landing')
-  const [authUser, setAuthUser] = useState<{ userid: number; name: string; email: string } | null>(null)
+  const [page, setPage] = useState<Page>(() => (loadAuthUserFromCookie() ? 'tracker' : 'landing'))
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUserFromCookie())
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -107,13 +173,72 @@ function App() {
   const [isSubmittingSignup, setIsSubmittingSignup] = useState(false)
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false)
 
+  const [selectedWaterDate, setSelectedWaterDate] = useState('')
+  const [waterSummary, setWaterSummary] = useState<WaterSummaryResponse | null>(null)
+  const [waterError, setWaterError] = useState('')
+  const [isLoadingWater, setIsLoadingWater] = useState(false)
+
   const signupUrl = useMemo(() => getApiUrl(SIGNUP_ENDPOINT), [])
   const loginUrl = useMemo(() => getApiUrl(LOGIN_ENDPOINT), [])
+  const waterUrl = useMemo(() => getApiUrl(WATER_ENDPOINT), [])
+
+  useEffect(() => {
+    if (authUser) {
+      saveAuthUserCookie(authUser)
+      return
+    }
+    clearAuthUserCookie()
+  }, [authUser])
+
+  async function fetchWaterSummary() {
+    if (!authUser?.userid) {
+      setWaterSummary(null)
+      setWaterError('No logged-in user was found for hydration lookup.')
+      return
+    }
+
+    const requestUrl = new URL(waterUrl)
+    requestUrl.searchParams.set('userid', String(authUser.userid))
+    if (selectedWaterDate) {
+      requestUrl.searchParams.set('date', selectedWaterDate)
+    }
+
+    try {
+      setIsLoadingWater(true)
+      setWaterError('')
+
+      const response = await fetch(requestUrl.toString())
+      if (!response.ok) {
+        throw new Error(`Unable to load hydration data (${response.status}).`)
+      }
+
+      const data = (await response.json()) as WaterSummaryResponse
+      setWaterSummary(data)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load hydration data.'
+      setWaterSummary(null)
+      setWaterError(message)
+    } finally {
+      setIsLoadingWater(false)
+    }
+  }
+
+  useEffect(() => {
+    if (page !== 'tracker') {
+      return
+    }
+    void fetchWaterSummary()
+  }, [page, authUser?.userid, selectedWaterDate])
 
   function goToPage(nextPage: Page) {
     setStatusMessage('')
     setIsErrorMessage(false)
     setPage(nextPage)
+  }
+
+  function handleLogout() {
+    setAuthUser(null)
+    goToPage('landing')
   }
 
   async function handleSignup(event: FormEvent<HTMLFormElement>) {
@@ -528,13 +653,20 @@ function App() {
   }
 
   function renderTracker() {
+    const hydrationPercentage = Math.round((waterSummary?.percentage ?? 0) * 100)
+
     return (
       <div className="tracker-page">
         <header className="tracker-header">
           <h1>Bloom Activity Tracker</h1>
-          <button className="ghost-btn" onClick={() => goToPage('landing')}>
-            Back To Landing
-          </button>
+          <div>
+            <button className="ghost-btn" onClick={() => goToPage('landing')}>
+              Back To Landing
+            </button>
+            <button className="ghost-btn" onClick={handleLogout}>
+              Log Out
+            </button>
+          </div>
         </header>
 
         <section className="tracker-card">
@@ -543,10 +675,40 @@ function App() {
             You are logged in as {authUser?.email ?? 'your account'}. This is your flow destination before the full
             tracker modules are added.
           </p>
+
+          <div className="tracker-toolbar">
+            <label htmlFor="water-date">Hydration Date</label>
+            <input
+              id="water-date"
+              type="date"
+              value={selectedWaterDate}
+              onChange={(event) => setSelectedWaterDate(event.target.value)}
+            />
+            <button className="ghost-btn" onClick={() => void fetchWaterSummary()} disabled={isLoadingWater}>
+              {isLoadingWater ? 'Loading...' : 'Refresh'}
+            </button>
+          </div>
+
           <div className="tracker-grid">
             <article>
               <h3>Hydration Log</h3>
-              <p>Next step: connect to /water POST and /water GET endpoints.</p>
+              {waterError ? (
+                <p>{waterError}</p>
+              ) : (
+                <>
+                  <p>
+                    {waterSummary
+                      ? `${waterSummary.amount_logged} oz of ${waterSummary.goal} oz (${hydrationPercentage}%)`
+                      : 'No hydration summary available yet.'}
+                  </p>
+                  <p>
+                    Plant Stage: <strong>{waterSummary?.plant_stage ?? 0}</strong>
+                  </p>
+                  <p>
+                    Entries Today: <strong>{waterSummary?.water_logs.length ?? 0}</strong>
+                  </p>
+                </>
+              )}
             </article>
             <article>
               <h3>Mood Log</h3>
@@ -556,6 +718,22 @@ function App() {
               <h3>Daily Summary</h3>
               <p>Next step: display /summary data with progress visuals and plant stage.</p>
             </article>
+          </div>
+
+          <div className="water-log-list">
+            <h3>Water Entries</h3>
+            {waterSummary?.water_logs.length ? (
+              <ul>
+                {waterSummary.water_logs.map((log) => (
+                  <li key={log.id}>
+                    <span>{log.amount} oz</span>
+                    <span>{new Date(log.created_at).toLocaleTimeString()}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No water entries for this date yet.</p>
+            )}
           </div>
         </section>
       </div>
