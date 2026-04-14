@@ -11,3 +11,6 @@ frontend/dist/
 
 # OS
 .DS_Store
+
+# Backend VM Setup Instructions
+vm_setup.md
