@@ -1,7 +1,12 @@
+/* ============================================
+   BLOOM — Design Tokens (extracted from Figma)
+   Add one @import of this file at the top of
+   your main index.css or App.css.
+   ============================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Anonymous+Pro:ital,wght@0,400;0,700;1,400&display=swap');
 /* Star Crush is a custom font — host it locally and add an @font-face here */
- 
+
 :root {
   /* ---- Palette ---- */
   --bloom-navy:        #051A35;   /* darkest — borders & outlines */
@@ -16,10 +21,11 @@
   --bloom-cream:       #FFFFF8;   /* surface / light text        */
   --bloom-gold:        #DFCB78;
   --bloom-coral:       #D95A5A;
- 
+  --bloom-pink:        #F2CECE;
+
   /* ---- Gradients ---- */
   --bloom-grad-login:
-    linear-gradient(144deg, #245776 1%, #347CA9 16%, #DFD4BD 74%);
+    linear-gradient(180deg, #93BAA3 35%, #BDCDBA 65%, #E8E0D0 104%);
   --bloom-grad-signup:
     linear-gradient(144deg, #245776 1%, #347CA9 16%, #DFD4BD 74%);
   --bloom-grad-btn:
@@ -30,19 +36,18 @@
     linear-gradient(180deg, #3A7396 12%, #80A3B2 53%, #A1B4B6 81%, #DFD4BD 98%);
   --bloom-grad-progress:
     linear-gradient(156deg, #347CA9 16%, #8FAEBD 45%, #E8E0D0 74%);
- 
+
   /* ---- Shadows (retro hard offset style) ---- */
   --bloom-shadow-sm:  5px 5px 0px 0px rgba(5,26,53,0.75);
   --bloom-shadow-md:  7px 7px 0px 0px #213652;
   --bloom-shadow-nav: 0px 6px 0px 0px rgba(52,124,169,0.42);
- 
+
   /* ---- Typography ---- */
   --bloom-font-heading: 'Star Crush', 'Noto Sans', sans-serif;
   --bloom-font-body:    'Anonymous Pro', monospace;
   --bloom-font-pixel:   'Lower Pixel', 'IBM Plex Mono', monospace;
- 
+
   /* ---- Radii ---- */
   --bloom-radius-sm: 8px;
   --bloom-radius-md: 12px;
 }
- 
