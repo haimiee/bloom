@@ -19,14 +19,12 @@ function SignUp({ onGoSignIn, onSignUp }) {
   return (
     <main>
       <div className="section">
-        <div className="box" style={{ flexBasis: '100%' }}>
+        <div className="box">
           <h1>Sign Up</h1>
           <p>Create your Bloom account.</p>
         </div>
-      </div>
 
-      <div className="section">
-        <div className="box" style={{ flexBasis: '100%' }}>
+        <div className="box">
           <label htmlFor="signup-name">Full Name</label>
           <input
             id="signup-name"
@@ -57,10 +55,8 @@ function SignUp({ onGoSignIn, onSignUp }) {
           <button className="btn" type="button" onClick={handleSubmit}>Create Account</button>
           {error && <p>{error}</p>}
         </div>
-      </div>
 
-      <div className="section">
-        <div className="box" style={{ flexBasis: '100%' }}>
+        <div className="box">
           <p>
             Already have an account?{' '}
             <button

@@ -2,16 +2,14 @@
    only the page background gradient differs */
 
 .section {
-  width: min(760px, 92%);
-  margin: 2rem auto 0;
+  width: min(480px, 92%);
   display: flex;
-  flex-wrap: nowrap;
+  flex-direction: column;
   gap: 1rem;
-  justify-content: center;
   background: var(--bloom-sand-mid);
   border: none;
   border-radius: var(--bloom-radius-md);
-  padding: 1.25rem;
+  padding: 2rem;
   box-shadow: var(--bloom-shadow-sm);
 }
 
@@ -30,6 +28,13 @@ body {
   background: var(--bloom-grad-signup);
   min-height: 100vh;
   font-family: var(--bloom-font-body);
+}
+
+main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .box h1 {
@@ -109,17 +114,8 @@ body {
   font-size: 0.9rem;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 520px) {
   .section {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .section > * {
-    width: min(100%, 560px);
-  }
-
-  .section > .btn {
-    width: auto;
+    padding: 1.25rem;
   }
 }

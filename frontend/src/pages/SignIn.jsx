@@ -18,14 +18,12 @@ function SignIn({ onGoSignUp, onSignIn }) {
   return (
     <main>
       <div className="section">
-        <div className="box" style={{ flexBasis: '100%' }}>
+        <div className="box">
           <h1>Sign In</h1>
           <p>Welcome back to Bloom.</p>
         </div>
-      </div>
 
-      <div className="section">
-        <div className="box" style={{ flexBasis: '100%' }}>
+        <div className="box">
           <label htmlFor="login-email">Email</label>
           <input
             id="login-email"
@@ -47,10 +45,8 @@ function SignIn({ onGoSignUp, onSignIn }) {
           <button className="btn" type="button" onClick={handleSubmit}>Sign In</button>
           {error && <p>{error}</p>}
         </div>
-      </div>
 
-      <div className="section">
-        <div className="box" style={{ flexBasis: '100%' }}>
+        <div className="box">
           <p>
             Don't have an account?{' '}
             <button
