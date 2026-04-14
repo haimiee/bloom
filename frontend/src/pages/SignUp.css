@@ -1,0 +1,121 @@
+/* SignUp shares the same layout classes as SignIn —
+   only the page background gradient differs */
+
+.section {
+  width: min(480px, 92%);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: var(--bloom-sand-mid);
+  border: none;
+  border-radius: var(--bloom-radius-md);
+  padding: 2rem;
+  box-shadow: var(--bloom-shadow-sm);
+}
+
+.box {
+  flex: 1 1 260px;
+  border: none;
+  border-radius: var(--bloom-radius-sm);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+body {
+  background: var(--bloom-grad-signup);
+  min-height: 100vh;
+  font-family: var(--bloom-font-body);
+}
+
+main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.box h1 {
+  font-family: var(--bloom-font-heading);
+  letter-spacing: 9px;
+  color: var(--bloom-navy);
+  font-size: 2rem;
+  margin: 0;
+}
+
+.box p {
+  font-family: var(--bloom-font-body);
+  color: var(--bloom-navy);
+  letter-spacing: 2px;
+  margin: 0;
+}
+
+.box label {
+  font-family: var(--bloom-font-body);
+  font-weight: 700;
+  color: var(--bloom-navy);
+  letter-spacing: 0.1px;
+}
+
+.box input {
+  background: var(--bloom-cream);
+  border: none;
+  border-radius: 0;
+  padding: 0.7rem 0.75rem;
+  font-family: var(--bloom-font-body);
+  font-size: 1rem;
+  color: #000;
+  box-shadow: var(--bloom-shadow-md);
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  letter-spacing: 0.1px;
+}
+
+.box input:focus {
+  box-shadow: var(--bloom-shadow-md), 0 0 0 2px var(--bloom-blue);
+}
+
+.btn {
+  background: var(--bloom-grad-btn);
+  border: none;
+  border-radius: 0;
+  padding: 0.6rem 1.1rem;
+  font-family: var(--bloom-font-heading);
+  font-size: 1.1rem;
+  letter-spacing: 6px;
+  color: var(--bloom-cream);
+  text-shadow: 2px 2px 0px var(--bloom-navy);
+  box-shadow: var(--bloom-shadow-md);
+  cursor: pointer;
+  width: fit-content;
+  transition: filter 0.15s;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+.btn:active {
+  box-shadow: 2px 2px 0px 0px var(--bloom-shadow-col);
+  transform: translate(2px, 2px);
+}
+
+.box button[style*="border: none"] {
+  font-family: var(--bloom-font-body);
+  color: var(--bloom-blue-dark);
+  letter-spacing: 1px;
+}
+
+.box p:last-child:not(:first-child) {
+  color: var(--bloom-coral);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 520px) {
+  .section {
+    padding: 1.25rem;
+  }
+}
