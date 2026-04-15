@@ -29,7 +29,6 @@ class LogWaterRequest(BaseModel):
 
 class LogMoodRequest(BaseModel):
     mood: str
-    text: str | None = None
     userid: int
 
 class SignupEntry(BaseModel):
@@ -222,13 +221,13 @@ def get_water_summary_for_day(day_string: str, userid: int):
     }
 
 # mood queries / logic
-def create_mood_log(mood: str, text: str | None, userid: int):
+def create_mood_log(mood: str, userid: int):
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        "INSERT INTO mood_logs (userid, mood, text, created_at) VALUES (?, ?, ?, ?)",
-        (userid, mood, text, datetime.utcnow().isoformat())
+        "INSERT INTO mood_logs (userid, mood, created_at) VALUES (?, ?, ?)",
+        (userid, mood, datetime.utcnow().isoformat())
     )
 
     conn.commit()
@@ -239,7 +238,7 @@ def get_mood_logs_for_day(day_string: str, userid: int):
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT id, mood, text, created_at FROM mood_logs WHERE created_at LIKE ? AND userid = ? ORDER BY created_at",
+        "SELECT id, mood, created_at FROM mood_logs WHERE created_at LIKE ? AND userid = ? ORDER BY created_at",
         (f"{day_string}%", userid)
     )
 
@@ -325,7 +324,7 @@ def get_water(userid: int, date_str: str | None = Query(default=None, alias="dat
 
 @app.post("/mood")
 def log_mood(entry: LogMoodRequest):
-    create_mood_log(entry.mood, entry.text, entry.userid)
+    create_mood_log(entry.mood, entry.userid)
     return LogMoodResponse(entry.mood, entry.userid)
 
 @app.get("/moods")
