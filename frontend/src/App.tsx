@@ -31,7 +31,7 @@ type WaterSummaryResponse = {
   water_logs: WaterLog[]
 }
 
-type Page = 'landing' | 'signup' | 'login' | 'tracker'
+type Page = 'landing' | 'signup' | 'login' | 'dashboard' | 'activity'
 
 type AuthUser = {
   userid: number
@@ -40,9 +40,11 @@ type AuthUser = {
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+const LANDING_HERO_IMAGE_URL = import.meta.env.VITE_LANDING_HERO_IMAGE_URL ?? '/landing-hero.png'
 const SIGNUP_ENDPOINT = import.meta.env.VITE_SIGNUP_ENDPOINT ?? '/auth/signup'
 const LOGIN_ENDPOINT = import.meta.env.VITE_LOGIN_ENDPOINT ?? '/auth/login'
 const WATER_ENDPOINT = import.meta.env.VITE_WATER_ENDPOINT ?? '/water'
+const LOG_WATER_ENDPOINT = import.meta.env.VITE_LOG_WATER_ENDPOINT ?? '/water'
 const AUTH_COOKIE_NAME = 'bloom_auth_user'
 const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24
 
@@ -152,8 +154,84 @@ function loadAuthUserFromCookie(): AuthUser | null {
   return null
 }
 
+function pageToHash(page: Page) {
+  return `#/${page}`
+}
+
+function hashToPage(hash: string): Page | null {
+  const normalized = hash.replace(/^#\/?/, '').trim().toLowerCase()
+
+  if (
+    normalized === 'landing' ||
+    normalized === 'signup' ||
+    normalized === 'login' ||
+    normalized === 'dashboard' ||
+    normalized === 'activity'
+  ) {
+    return normalized
+  }
+
+  return null
+}
+
+function guardPage(page: Page, isAuthenticated: boolean): Page {
+  if (!isAuthenticated && (page === 'dashboard' || page === 'activity')) {
+    return 'landing'
+  }
+
+  return page
+}
+
+function getInitialPage(isAuthenticated: boolean): Page {
+  const fromHash = hashToPage(window.location.hash)
+  if (!fromHash) {
+    return isAuthenticated ? 'dashboard' : 'landing'
+  }
+  return guardPage(fromHash, isAuthenticated)
+}
+
+function clampProgress(percentage: number) {
+  if (Number.isNaN(percentage)) {
+    return 0
+  }
+  return Math.max(0, Math.min(1, percentage))
+}
+
+function formatMonthHeader(dateValue: string) {
+  const basis = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date()
+  return basis.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+function getTodayDateInputValue() {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
+function getPlantStageLabel(stage: number) {
+  if (stage >= 4) {
+    return 'Blooming'
+  }
+  if (stage === 3) {
+    return 'Growing Strong'
+  }
+  if (stage === 2) {
+    return 'Sprouting'
+  }
+  if (stage === 1) {
+    return 'Seedling'
+  }
+  return 'Seed'
+}
+
 function App() {
-  const [page, setPage] = useState<Page>(() => (loadAuthUserFromCookie() ? 'tracker' : 'landing'))
+  const [page, setPage] = useState<Page>(() => getInitialPage(Boolean(loadAuthUserFromCookie())))
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUserFromCookie())
 
   const [name, setName] = useState('')
@@ -173,14 +251,23 @@ function App() {
   const [isSubmittingSignup, setIsSubmittingSignup] = useState(false)
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false)
 
-  const [selectedWaterDate, setSelectedWaterDate] = useState('')
+  const [selectedWaterDate, setSelectedWaterDate] = useState(getTodayDateInputValue())
   const [waterSummary, setWaterSummary] = useState<WaterSummaryResponse | null>(null)
   const [waterError, setWaterError] = useState('')
   const [isLoadingWater, setIsLoadingWater] = useState(false)
+  const [waterAmountInput, setWaterAmountInput] = useState('8')
+  const [isLoggingWater, setIsLoggingWater] = useState(false)
+  const [activityMessage, setActivityMessage] = useState('')
+  const [activityError, setActivityError] = useState('')
+  const [heroImageVisible, setHeroImageVisible] = useState(true)
+  const [plantDisplayMode, setPlantDisplayMode] = useState<'ground' | 'pot'>('ground')
+  const [navMenuOpen, setNavMenuOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
 
   const signupUrl = useMemo(() => getApiUrl(SIGNUP_ENDPOINT), [])
   const loginUrl = useMemo(() => getApiUrl(LOGIN_ENDPOINT), [])
   const waterUrl = useMemo(() => getApiUrl(WATER_ENDPOINT), [])
+  const logWaterUrl = useMemo(() => getApiUrl(LOG_WATER_ENDPOINT), [])
 
   useEffect(() => {
     if (authUser) {
@@ -188,6 +275,29 @@ function App() {
       return
     }
     clearAuthUserCookie()
+  }, [authUser])
+
+  useEffect(() => {
+    const applyUrlState = () => {
+      const fromHash = hashToPage(window.location.hash)
+      const fallbackPage = authUser ? 'dashboard' : 'landing'
+      const guardedPage = guardPage(fromHash ?? fallbackPage, Boolean(authUser))
+
+      setPage(guardedPage)
+
+      if (!fromHash || guardedPage !== fromHash) {
+        window.history.replaceState({}, '', pageToHash(guardedPage))
+      }
+    }
+
+    applyUrlState()
+    window.addEventListener('hashchange', applyUrlState)
+    window.addEventListener('popstate', applyUrlState)
+
+    return () => {
+      window.removeEventListener('hashchange', applyUrlState)
+      window.removeEventListener('popstate', applyUrlState)
+    }
   }, [authUser])
 
   async function fetchWaterSummary() {
@@ -224,21 +334,106 @@ function App() {
   }
 
   useEffect(() => {
-    if (page !== 'tracker') {
+    if (page !== 'dashboard' && page !== 'activity') {
       return
     }
     void fetchWaterSummary()
   }, [page, authUser?.userid, selectedWaterDate])
 
-  function goToPage(nextPage: Page) {
+  useEffect(() => {
+    const plantStage = waterSummary?.plant_stage ?? 0
+    setPlantDisplayMode(plantStage >= 4 ? 'ground' : 'pot')
+  }, [waterSummary?.plant_stage])
+
+  useEffect(() => {
+    setNavMenuOpen(false)
+    setProfileMenuOpen(false)
+  }, [page])
+
+  async function handleLogWater(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!authUser?.userid) {
+      setActivityError('You must be logged in to log water.')
+      return
+    }
+
+    const parsedAmount = Number.parseInt(waterAmountInput, 10)
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setActivityError('Enter a valid water amount in ounces.')
+      return
+    }
+
+    try {
+      setIsLoggingWater(true)
+      setActivityError('')
+      setActivityMessage('Logging water...')
+
+      const response = await fetch(logWaterUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parsedAmount,
+          userid: authUser.userid,
+        }),
+      })
+
+      const payload = await response.json()
+
+      if (!response.ok) {
+        const backendMessage =
+          (payload && typeof payload.message === 'string' && payload.message) ||
+          (payload && typeof payload.detail === 'string' && payload.detail) ||
+          ''
+        throw new Error(backendMessage || 'Unable to log water right now.')
+      }
+
+      if (payload && typeof payload.summary === 'object' && payload.summary) {
+        setWaterSummary(payload.summary as WaterSummaryResponse)
+      } else {
+        await fetchWaterSummary()
+      }
+
+      setActivityMessage(`Logged ${parsedAmount} oz successfully.`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to log water right now.'
+      setActivityError(message)
+      setActivityMessage('')
+    } finally {
+      setIsLoggingWater(false)
+    }
+  }
+
+  function navigateTo(nextPage: Page, options?: { replace?: boolean; ignoreAuthGuard?: boolean }) {
+    const guardedPage = options?.ignoreAuthGuard ? nextPage : guardPage(nextPage, Boolean(authUser))
+    const targetHash = pageToHash(guardedPage)
+
+    if (options?.replace) {
+      window.history.replaceState({}, '', targetHash)
+    } else {
+      window.history.pushState({}, '', targetHash)
+    }
+
     setStatusMessage('')
     setIsErrorMessage(false)
-    setPage(nextPage)
+    setNavMenuOpen(false)
+    setProfileMenuOpen(false)
+    setPage(guardedPage)
+  }
+
+  function goToPage(nextPage: Page) {
+    navigateTo(nextPage)
   }
 
   function handleLogout() {
     setAuthUser(null)
-    goToPage('landing')
+    setWaterSummary(null)
+    setWaterError('')
+    setActivityError('')
+    setActivityMessage('')
+    setNavMenuOpen(false)
+    setProfileMenuOpen(false)
+    navigateTo('landing', { replace: true, ignoreAuthGuard: true })
   }
 
   async function handleSignup(event: FormEvent<HTMLFormElement>) {
@@ -354,7 +549,7 @@ function App() {
       setAuthUser({ userid: userId, name: userName, email: userEmail })
       setStatusMessage('Login successful. Welcome back.')
       setIsErrorMessage(false)
-      setPage('tracker')
+      navigateTo('dashboard', { ignoreAuthGuard: true })
     } catch (error) {
       const fallback = 'Something went wrong while logging in.'
       const message = error instanceof Error ? error.message : fallback
@@ -370,9 +565,7 @@ function App() {
     return (
       <div className="landing-page">
         <header className="landing-nav">
-          <button className="brand-chip" onClick={() => goToPage('landing')}>
-            BLOOM
-          </button>
+          {renderBloomLogo('nav')}
           <nav>
             <button className="nav-btn" onClick={() => goToPage('signup')}>
               Sign Up
@@ -384,7 +577,16 @@ function App() {
         </header>
 
         <section className="hero-section">
-          <div className="hero-art" aria-hidden="true" />
+          <div className="hero-art" aria-label="Landing art by Bloom frontend design team">
+            {heroImageVisible && (
+              <img
+                src={LANDING_HERO_IMAGE_URL}
+                alt="Landing art"
+                onError={() => setHeroImageVisible(false)}
+                loading="lazy"
+              />
+            )}
+          </div>
           <article className="hero-card">
             <h1>Change The Way You Approach Your Health</h1>
             <p>
@@ -466,14 +668,363 @@ function App() {
     )
   }
 
+  function renderBloomLogo(mode: 'nav' | 'auth') {
+    return (
+      <button
+        className={`bloom-logo ${mode}`}
+        onClick={() => navigateTo('landing', { ignoreAuthGuard: true })}
+        aria-label="Go to landing page"
+      >
+        Bloom
+      </button>
+    )
+  }
+
+  function renderHamburgerMenu() {
+    return (
+      <div className="nav-dropdown-wrap">
+        <button
+          type="button"
+          className={`hamburger-btn ${navMenuOpen ? 'open' : ''}`}
+          aria-label="Open navigation menu"
+          aria-expanded={navMenuOpen}
+          onClick={() => setNavMenuOpen((current) => !current)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+
+        {navMenuOpen && (
+          <div className="nav-dropdown" role="menu" aria-label="Navigation menu">
+            <button className="nav-dropdown-item" onClick={() => navigateTo('dashboard', { ignoreAuthGuard: true })}>
+              <span className="home-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 3 2.5 11.2l1.3 1.5L5 11.8V20h5v-5h4v5h5v-8.2l1.2.9 1.3-1.5L12 3Z" />
+                </svg>
+              </span>
+              Home
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function renderProfileMenu() {
+    const profileName = authUser?.name?.trim() || 'User'
+
+    return (
+      <div className="nav-dropdown-wrap profile-wrap">
+        <span className="profile-name" aria-hidden="true">
+          {profileName}
+        </span>
+        <button
+          type="button"
+          className={`profile-btn ${profileMenuOpen ? 'open' : ''}`}
+          aria-label="Open profile menu"
+          aria-expanded={profileMenuOpen}
+          onClick={() => setProfileMenuOpen((current) => !current)}
+        >
+          <span className="profile-avatar" aria-hidden="true" />
+        </button>
+
+        {profileMenuOpen && (
+          <div className="nav-dropdown profile-dropdown" role="menu" aria-label="Profile menu">
+            <button className="nav-dropdown-item danger" onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   function renderAuthTopBar(title: string) {
     return (
       <div className="auth-topbar">
         <button type="button" className="ghost-btn" onClick={() => goToPage('landing')}>
           Back To Landing
         </button>
-        <h1 className="brand">Bloom</h1>
+        {renderBloomLogo('auth')}
         <p className="auth-title">{title}</p>
+      </div>
+    )
+  }
+
+  function renderDashboardNav(activePage: 'dashboard' | 'activity') {
+    return (
+      <header className="dashboard-nav">
+        <div className="dashboard-nav-left">
+          {renderHamburgerMenu()}
+          {renderBloomLogo('nav')}
+          <button
+            className={`dashboard-link ${activePage === 'activity' ? 'is-active' : ''}`}
+            onClick={() => navigateTo('activity', { ignoreAuthGuard: true })}
+          >
+            Activity Logging
+          </button>
+        </div>
+
+        <div className="dashboard-nav-right">{renderProfileMenu()}</div>
+      </header>
+    )
+  }
+
+  function renderPlantStagePanel() {
+    const stage = waterSummary?.plant_stage ?? 0
+    const hydrationRatio = clampProgress(waterSummary?.percentage ?? 0)
+    const hydrationPercent = Math.round((waterSummary?.percentage ?? 0) * 100)
+    const isFullyBloomed = stage >= 4
+    const useGroundDisplay = isFullyBloomed && plantDisplayMode === 'ground'
+    const handlePlantToggle = () => {
+      if (!isFullyBloomed) {
+        return
+      }
+
+      setPlantDisplayMode((current) => (current === 'ground' ? 'pot' : 'ground'))
+    }
+
+    return (
+      <aside className="plant-panel">
+        <h2>Your Plant</h2>
+        <p className="plant-stage-text">
+          {isFullyBloomed ? (
+            <strong>Your plant has fully bloomed!</strong>
+          ) : (
+            <>
+              Stage {stage}/4: <strong>{getPlantStageLabel(stage)}</strong>
+            </>
+          )}
+        </p>
+
+        <button
+          type="button"
+          className={`plant-visual ${isFullyBloomed ? 'is-clickable' : ''}`}
+          aria-label={
+            isFullyBloomed
+              ? plantDisplayMode === 'ground'
+                ? 'Fully bloomed plant in the ground. Click to place it in a pot.'
+                : 'Fully bloomed plant in a pot. Click to place it in the ground.'
+              : `Plant stage ${stage}`
+          }
+          aria-pressed={isFullyBloomed && plantDisplayMode === 'pot'}
+          onClick={handlePlantToggle}
+        >
+          <div className="plant-sun" />
+          <div className="plant-cloud cloud-one" />
+          <div className="plant-cloud cloud-two" />
+          <div className="plant-hills" />
+          {useGroundDisplay ? <div className="plant-ground ground-visible" /> : <div className="plant-ground" />}
+          {!useGroundDisplay && <div className="plant-pot" />}
+          {stage >= 1 && <div className="plant-stem" />}
+          {stage >= 2 && <div className="plant-leaf leaf-left" />}
+          {stage >= 2 && <div className="plant-leaf leaf-right" />}
+          {stage >= 3 && <div className="plant-leaf leaf-top-left" />}
+          {stage >= 3 && <div className="plant-leaf leaf-top-right" />}
+          {stage >= 4 && <div className="plant-bloom" />}
+        </button>
+
+        <div className="plant-meter">
+          <span style={{ width: `${hydrationPercent}%` }} />
+        </div>
+        <p className="plant-meta">Hydration: {hydrationPercent}% of daily goal</p>
+      </aside>
+    )
+  }
+
+  function renderProgressBar(label: string, percentage: number, variant: 'blue' | 'green' | 'gold') {
+    const segmentCount = 12
+    const filledSegments = Math.round(clampProgress(percentage) * segmentCount)
+
+    return (
+      <div className={`progress-card ${variant}`}>
+        <div className="progress-card-title">{label}</div>
+        <div className="progress-card-track">
+          {Array.from({ length: segmentCount }).map((_, index) => (
+            <span key={`${label}-${index}`} className={index < filledSegments ? 'filled' : ''} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  function renderDashboard() {
+    const hydrationRatio = clampProgress(waterSummary?.percentage ?? 0)
+    const moodRatio = clampProgress((waterSummary?.water_logs.length ?? 0) / 8)
+
+    return (
+      <div className="dashboard-page">
+        {renderDashboardNav('dashboard')}
+
+        <main className="dashboard-main">
+          <section className="greeting-banner">
+            <h1>Good Morning, {authUser?.name ?? 'Bloom User'}!</h1>
+            <p>Small daily actions build long-term wellness. Your progress is updated from your latest logs.</p>
+          </section>
+
+          {renderPlantStagePanel()}
+
+          <div className="dashboard-content">
+            <section className="dashboard-grid">
+              <article className="calendar-card">
+                <h2>{formatMonthHeader(selectedWaterDate)}</h2>
+                <p>Calendar interactions are coming soon. Date filtering already updates hydration data.</p>
+                <div className="calendar-placeholder" aria-hidden="true">
+                  {Array.from({ length: 35 }).map((_, index) => (
+                    <span key={index}>{index + 1 <= 31 ? index + 1 : ''}</span>
+                  ))}
+                </div>
+              </article>
+
+              <article className="tasks-card">
+                <h2>Upcoming Tasks</h2>
+                <ul>
+                  <li>Log water at least 3 times today</li>
+                  <li>Complete one mood check-in</li>
+                  <li>Review your summary before bed</li>
+                </ul>
+              </article>
+
+              <article className="friends-card">
+                <h2>Your Friends</h2>
+                <p>Community feed and friend comparisons will be added in a later milestone.</p>
+                <div className="friend-snapshot">
+                  <div className="friend-avatar" />
+                  <div>
+                    <p className="friend-name">Wellness Buddy</p>
+                    <p className="friend-note">Hydration streak active</p>
+                  </div>
+                </div>
+              </article>
+            </section>
+
+            <section className="progress-stack">
+              {renderProgressBar('Hydration Progress', hydrationRatio, 'blue')}
+              {renderProgressBar('Activity Progress', moodRatio, 'green')}
+              {renderProgressBar('Consistency Score', (hydrationRatio + moodRatio) / 2, 'gold')}
+            </section>
+
+            <section className="dashboard-actions">
+              <button className="join-btn" onClick={() => navigateTo('activity', { ignoreAuthGuard: true })}>
+                Go To Activity Logging
+              </button>
+              <div className="dashboard-meta">
+                {waterError ? (
+                  <p className="error-text">{waterError}</p>
+                ) : (
+                  <p>
+                    Latest hydration: {waterSummary?.amount_logged ?? 0} / {waterSummary?.goal ?? 64} oz
+                  </p>
+                )}
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  function renderActivity() {
+    const hydrationPercentage = Math.round(clampProgress(waterSummary?.percentage ?? 0) * 100)
+
+    return (
+      <div className="dashboard-page">
+        {renderDashboardNav('activity')}
+
+        <main className="activity-main">
+          <section className="greeting-banner">
+            <h1>Good Morning, {authUser?.name ?? 'Bloom User'}!</h1>
+            <p>Track your activity and water, then watch your plant react as you progress.</p>
+          </section>
+
+          {renderPlantStagePanel()}
+
+          <div className="activity-content">
+            <section className="activity-card">
+              <h1>Activity Logging</h1>
+              <p>Log what you do now. Calendar interactions and extra activities can be layered in next.</p>
+
+              <form className="activity-form" onSubmit={handleLogWater}>
+                <label htmlFor="water-amount">Water Amount (oz)</label>
+                <input
+                  id="water-amount"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={waterAmountInput}
+                  onChange={(event) => setWaterAmountInput(event.target.value)}
+                />
+                <button className="primary-action" type="submit" disabled={isLoggingWater}>
+                  {isLoggingWater ? 'Saving...' : 'Log Water'}
+                </button>
+              </form>
+
+              <div className="tracker-toolbar">
+                <label htmlFor="water-date">Hydration Date</label>
+                <input
+                  id="water-date"
+                  type="date"
+                  value={selectedWaterDate}
+                  onChange={(event) => setSelectedWaterDate(event.target.value)}
+                />
+                <button className="ghost-btn" onClick={() => void fetchWaterSummary()} disabled={isLoadingWater}>
+                  {isLoadingWater ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+
+              {activityMessage && <p className="success-text">{activityMessage}</p>}
+              {activityError && <p className="error-text">{activityError}</p>}
+
+              <div className="tracker-grid">
+                <article>
+                  <h3>Hydration Log</h3>
+                  {waterError ? (
+                    <p>{waterError}</p>
+                  ) : (
+                    <>
+                      <p>
+                        {waterSummary
+                          ? `${waterSummary.amount_logged} oz of ${waterSummary.goal} oz (${hydrationPercentage}%)`
+                          : 'No hydration summary available yet.'}
+                      </p>
+                      <p>
+                        Plant Stage: <strong>{waterSummary?.plant_stage ?? 0}</strong>
+                      </p>
+                      <p>
+                        Entries Today: <strong>{waterSummary?.water_logs.length ?? 0}</strong>
+                      </p>
+                    </>
+                  )}
+                </article>
+                <article>
+                  <h3>Mood Log</h3>
+                  <p>Next step: connect to /mood POST and /moods GET endpoints.</p>
+                </article>
+                <article>
+                  <h3>Daily Summary</h3>
+                  <p>Next step: display /summary data with progress visuals and plant stage.</p>
+                </article>
+              </div>
+
+              <div className="water-log-list">
+                <h3>Water Entries</h3>
+                {waterSummary?.water_logs.length ? (
+                  <ul>
+                    {waterSummary.water_logs.map((log) => (
+                      <li key={log.id}>
+                        <span>{log.amount} oz</span>
+                        <span>{new Date(log.created_at).toLocaleTimeString()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No water entries for this date yet.</p>
+                )}
+              </div>
+            </section>
+          </div>
+        </main>
       </div>
     )
   }
@@ -652,94 +1203,6 @@ function App() {
     )
   }
 
-  function renderTracker() {
-    const hydrationPercentage = Math.round((waterSummary?.percentage ?? 0) * 100)
-
-    return (
-      <div className="tracker-page">
-        <header className="tracker-header">
-          <h1>Bloom Activity Tracker</h1>
-          <div>
-            <button className="ghost-btn" onClick={() => goToPage('landing')}>
-              Back To Landing
-            </button>
-            <button className="ghost-btn" onClick={handleLogout}>
-              Log Out
-            </button>
-          </div>
-        </header>
-
-        <section className="tracker-card">
-          <h2>Welcome, {authUser?.name ?? 'Bloom User'}.</h2>
-          <p>
-            You are logged in as {authUser?.email ?? 'your account'}. This is your flow destination before the full
-            tracker modules are added.
-          </p>
-
-          <div className="tracker-toolbar">
-            <label htmlFor="water-date">Hydration Date</label>
-            <input
-              id="water-date"
-              type="date"
-              value={selectedWaterDate}
-              onChange={(event) => setSelectedWaterDate(event.target.value)}
-            />
-            <button className="ghost-btn" onClick={() => void fetchWaterSummary()} disabled={isLoadingWater}>
-              {isLoadingWater ? 'Loading...' : 'Refresh'}
-            </button>
-          </div>
-
-          <div className="tracker-grid">
-            <article>
-              <h3>Hydration Log</h3>
-              {waterError ? (
-                <p>{waterError}</p>
-              ) : (
-                <>
-                  <p>
-                    {waterSummary
-                      ? `${waterSummary.amount_logged} oz of ${waterSummary.goal} oz (${hydrationPercentage}%)`
-                      : 'No hydration summary available yet.'}
-                  </p>
-                  <p>
-                    Plant Stage: <strong>{waterSummary?.plant_stage ?? 0}</strong>
-                  </p>
-                  <p>
-                    Entries Today: <strong>{waterSummary?.water_logs.length ?? 0}</strong>
-                  </p>
-                </>
-              )}
-            </article>
-            <article>
-              <h3>Mood Log</h3>
-              <p>Next step: connect to /mood POST and /moods GET endpoints.</p>
-            </article>
-            <article>
-              <h3>Daily Summary</h3>
-              <p>Next step: display /summary data with progress visuals and plant stage.</p>
-            </article>
-          </div>
-
-          <div className="water-log-list">
-            <h3>Water Entries</h3>
-            {waterSummary?.water_logs.length ? (
-              <ul>
-                {waterSummary.water_logs.map((log) => (
-                  <li key={log.id}>
-                    <span>{log.amount} oz</span>
-                    <span>{new Date(log.created_at).toLocaleTimeString()}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No water entries for this date yet.</p>
-            )}
-          </div>
-        </section>
-      </div>
-    )
-  }
-
   if (page === 'signup') {
     return renderSignup()
   }
@@ -748,8 +1211,12 @@ function App() {
     return renderLogin()
   }
 
-  if (page === 'tracker') {
-    return renderTracker()
+  if (page === 'dashboard') {
+    return renderDashboard()
+  }
+
+  if (page === 'activity') {
+    return renderActivity()
   }
 
   return renderLanding()
