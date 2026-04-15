@@ -2,10 +2,11 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sqlite3
-from datetime import datetime, date
+from datetime import datetime
 import hashlib
 import hmac
 import os
+from zoneinfo import ZoneInfo
 
 # app + config
 app = FastAPI()
@@ -21,6 +22,7 @@ app.add_middleware(
 WATER_GOAL = 64
 DB_NAME = "database.db"
 PASSWORD_HASH_ITERATIONS = 200_000
+EASTERN_TZ = ZoneInfo("America/New_York")
 
 # request / response models
 class LogWaterRequest(BaseModel):
@@ -85,12 +87,15 @@ def init_db():
 init_db()
 
 # utility helpers
+def get_eastern_now():
+    return datetime.now(EASTERN_TZ)
+
 def get_day_string(selected_date: str | None = None):
     """
     if no date is passed in, use today's date.
     date format expected: YYYY-MM-DD
     """
-    return selected_date if selected_date else date.today().isoformat()
+    return selected_date if selected_date else get_eastern_now().date().isoformat()
 
 def get_plant_stage(percentage: float):
     """
@@ -156,7 +161,7 @@ def create_user(name: str, email: str, password_hash: str):
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO users (name, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
-        (name, email, password_hash, datetime.utcnow().isoformat()),
+        (name, email, password_hash, get_eastern_now().isoformat()),
     )
     conn.commit()
     user_id = cursor.lastrowid
@@ -185,7 +190,7 @@ def create_water_log(amount: int, userid: int):
 
     cursor.execute(
         "INSERT INTO water_logs (amount, userid, created_at) VALUES (?, ?, ?)",
-        (amount, userid, datetime.utcnow().isoformat())
+        (amount, userid, get_eastern_now().isoformat())
     )
 
     conn.commit()
@@ -227,7 +232,7 @@ def create_mood_log(mood: str, userid: int):
 
     cursor.execute(
         "INSERT INTO mood_logs (userid, mood, created_at) VALUES (?, ?, ?)",
-        (userid, mood, datetime.utcnow().isoformat())
+        (userid, mood, get_eastern_now().isoformat())
     )
 
     conn.commit()
