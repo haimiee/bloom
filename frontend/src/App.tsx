@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import './App.css'
 
 type AuthFieldErrors = {
@@ -41,12 +41,32 @@ type AuthUser = {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 const LANDING_HERO_IMAGE_URL = import.meta.env.VITE_LANDING_HERO_IMAGE_URL ?? '/landing-hero.png'
+const LANDING_BACKGROUND_IMAGE_URL = import.meta.env.VITE_LANDING_BACKGROUND_IMAGE_URL ?? ''
+const DASHBOARD_BACKGROUND_IMAGE_URL = import.meta.env.VITE_DASHBOARD_BACKGROUND_IMAGE_URL ?? ''
+const PLANT_IMAGE_URL = import.meta.env.VITE_PLANT_IMAGE_URL ?? ''
+const PLANT_STAGE_IMAGE_URLS: Record<number, string> = {
+  0: import.meta.env.VITE_PLANT_STAGE_0_IMAGE_URL ?? '',
+  1: import.meta.env.VITE_PLANT_STAGE_1_IMAGE_URL ?? '',
+  2: import.meta.env.VITE_PLANT_STAGE_2_IMAGE_URL ?? '',
+  3: import.meta.env.VITE_PLANT_STAGE_3_IMAGE_URL ?? '',
+  4: import.meta.env.VITE_PLANT_STAGE_4_IMAGE_URL ?? '',
+}
 const SIGNUP_ENDPOINT = import.meta.env.VITE_SIGNUP_ENDPOINT ?? '/auth/signup'
 const LOGIN_ENDPOINT = import.meta.env.VITE_LOGIN_ENDPOINT ?? '/auth/login'
 const WATER_ENDPOINT = import.meta.env.VITE_WATER_ENDPOINT ?? '/water'
 const LOG_WATER_ENDPOINT = import.meta.env.VITE_LOG_WATER_ENDPOINT ?? '/water'
 const AUTH_COOKIE_NAME = 'bloom_auth_user'
 const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24
+
+function getBackgroundStyle(variableName: string, imageUrl: string): CSSProperties | undefined {
+  if (!imageUrl) {
+    return undefined
+  }
+
+  return {
+    [variableName]: `url("${imageUrl}")`,
+  } as CSSProperties
+}
 
 function getApiUrl(endpoint: string) {
   if (/^https?:\/\//i.test(endpoint)) {
@@ -777,6 +797,7 @@ function App() {
     const hydrationPercent = Math.round((waterSummary?.percentage ?? 0) * 100)
     const isFullyBloomed = stage >= 4
     const useGroundDisplay = isFullyBloomed && plantDisplayMode === 'ground'
+    const plantImageUrl = PLANT_STAGE_IMAGE_URLS[stage] || PLANT_IMAGE_URL
     const handlePlantToggle = () => {
       if (!isFullyBloomed) {
         return
@@ -800,7 +821,7 @@ function App() {
 
         <button
           type="button"
-          className={`plant-visual ${isFullyBloomed ? 'is-clickable' : ''}`}
+          className={`plant-visual ${plantImageUrl ? 'has-image' : ''} ${isFullyBloomed ? 'is-clickable' : ''}`}
           aria-label={
             isFullyBloomed
               ? plantDisplayMode === 'ground'
@@ -811,18 +832,24 @@ function App() {
           aria-pressed={isFullyBloomed && plantDisplayMode === 'pot'}
           onClick={handlePlantToggle}
         >
-          <div className="plant-sun" />
-          <div className="plant-cloud cloud-one" />
-          <div className="plant-cloud cloud-two" />
-          <div className="plant-hills" />
-          {useGroundDisplay ? <div className="plant-ground ground-visible" /> : <div className="plant-ground" />}
-          {!useGroundDisplay && <div className="plant-pot" />}
-          {stage >= 1 && <div className="plant-stem" />}
-          {stage >= 2 && <div className="plant-leaf leaf-left" />}
-          {stage >= 2 && <div className="plant-leaf leaf-right" />}
-          {stage >= 3 && <div className="plant-leaf leaf-top-left" />}
-          {stage >= 3 && <div className="plant-leaf leaf-top-right" />}
-          {stage >= 4 && <div className="plant-bloom" />}
+          {plantImageUrl ? (
+            <img className="plant-stage-image" src={plantImageUrl} alt="" aria-hidden="true" draggable={false} />
+          ) : (
+            <>
+              <div className="plant-sun" />
+              <div className="plant-cloud cloud-one" />
+              <div className="plant-cloud cloud-two" />
+              <div className="plant-hills" />
+              {useGroundDisplay ? <div className="plant-ground ground-visible" /> : <div className="plant-ground" />}
+              {!useGroundDisplay && <div className="plant-pot" />}
+              {stage >= 1 && <div className="plant-stem" />}
+              {stage >= 2 && <div className="plant-leaf leaf-left" />}
+              {stage >= 2 && <div className="plant-leaf leaf-right" />}
+              {stage >= 3 && <div className="plant-leaf leaf-top-left" />}
+              {stage >= 3 && <div className="plant-leaf leaf-top-right" />}
+              {stage >= 4 && <div className="plant-bloom" />}
+            </>
+          )}
         </button>
 
         <div className="plant-meter">
@@ -852,9 +879,10 @@ function App() {
   function renderDashboard() {
     const hydrationRatio = clampProgress(waterSummary?.percentage ?? 0)
     const moodRatio = clampProgress((waterSummary?.water_logs.length ?? 0) / 8)
+    const pageStyle = getBackgroundStyle('--dashboard-background-image', DASHBOARD_BACKGROUND_IMAGE_URL)
 
     return (
-      <div className="dashboard-page">
+      <div className="dashboard-page" style={pageStyle}>
         {renderDashboardNav('dashboard')}
 
         <main className="dashboard-main">
@@ -927,9 +955,10 @@ function App() {
 
   function renderActivity() {
     const hydrationPercentage = Math.round(clampProgress(waterSummary?.percentage ?? 0) * 100)
+    const pageStyle = getBackgroundStyle('--dashboard-background-image', DASHBOARD_BACKGROUND_IMAGE_URL)
 
     return (
-      <div className="dashboard-page">
+      <div className="dashboard-page" style={pageStyle}>
         {renderDashboardNav('activity')}
 
         <main className="activity-main">

@@ -17,6 +17,10 @@
 .landing-page {
   min-height: 100svh;
   background: linear-gradient(to bottom, var(--sky) 0 42%, var(--peach) 42% 58%, var(--ocean-2) 58% 74%, var(--sand) 74% 100%);
+  background-image: var(--landing-background-image, none), linear-gradient(to bottom, var(--sky) 0 42%, var(--peach) 42% 58%, var(--ocean-2) 58% 74%, var(--sand) 74% 100%);
+  background-repeat: no-repeat, no-repeat;
+  background-size: cover, cover;
+  background-position: center, center;
   color: var(--ink);
 }
 
@@ -504,6 +508,10 @@
 .dashboard-page {
   min-height: 100svh;
   background: linear-gradient(160deg, #2f769f 0%, #8fb7cb 38%, #e8e0d0 100%);
+  background-image: var(--dashboard-background-image, none), linear-gradient(160deg, #2f769f 0%, #8fb7cb 38%, #e8e0d0 100%);
+  background-repeat: no-repeat, no-repeat;
+  background-size: cover, cover;
+  background-position: center, center;
 }
 
 .dashboard-nav {
@@ -955,6 +963,21 @@
     linear-gradient(180deg, #9fd3ee 0 44%, #7bc96f 44% 64%, #4c8b3a 64% 100%);
   padding: 0;
   cursor: default;
+}
+
+.plant-visual.has-image {
+  background: #cfe8bc;
+}
+
+.plant-stage-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  pointer-events: none;
+  user-select: none;
 }
 
 .plant-visual.is-clickable {
