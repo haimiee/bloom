@@ -14,3 +14,6 @@ frontend/dist/
 node_modules/
 dist/
 .env
+
+# Backend VM Setup Instructions
+vm_setup.md

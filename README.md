@@ -54,29 +54,18 @@ cd bloom
 ```
 
 ### 2. frontend steup
-```bash
-cd frontend
-```
-
-frontend should run on:
-```http://localhost:5173```
+1) cd .\bloom\frontend\
+2) install node
+3) npm install --dev
+4) npm run dev
+5) go to http://localhost:5173/ in browser
 
 ### 3. backend setup
-#### installing requirements
-```bash
-cd ../backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-#### testing databases
-run the backend locally in terminal with:
- `python -m uvicorn app.main:app --reload`
-open Swagger UI in browser at `http://127.0.0.1:8000/docs`
-This opens the FastAPI docs page where you can test endpoints and view JSON responses.
-
-shared/live deployed backend: `http://172.233.163.115:8000/docs`
-this version is running on the remote server and can be used for shared testing across devices
+1) install Python
+2) cd .\bloom\backend\
+3) pip install -r requirements.txt
+4) python3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+5) go to http://127.0.0.1:8000/docs
 
 note: 
 - local backend uses your own local database.db
