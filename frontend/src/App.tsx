@@ -3,6 +3,7 @@ import './App.css'
 import LandingPage from './screens/LandingPage'
 import LoginPage from './screens/LoginPage'
 import SignupPage from './screens/SignupPage'
+import AskMoodPage from './screens/AskMoodPage'
 import { ActivityPage, DashboardPage } from './screens/DashboardPage'
 
 type AuthFieldErrors = {
@@ -25,6 +26,12 @@ type WaterLog = {
   created_at: string
 }
 
+type MoodLog = {
+  id: number
+  mood: string
+  created_at: string
+}
+
 type WaterSummaryResponse = {
   userid: number
   date: string
@@ -35,7 +42,20 @@ type WaterSummaryResponse = {
   water_logs: WaterLog[]
 }
 
-type Page = 'landing' | 'signup' | 'login' | 'dashboard' | 'activity'
+type DailySummaryResponse = WaterSummaryResponse & {
+  moods_logged: number
+  moods: MoodLog[]
+}
+
+type WeekActivityDay = {
+  key: string
+  label: string
+  date: string
+  hasActivity: boolean
+  isToday: boolean
+}
+
+type Page = 'landing' | 'signup' | 'login' | 'ask-mood' | 'dashboard' | 'activity'
 
 type AuthUser = {
   userid: number
@@ -59,8 +79,12 @@ const SIGNUP_ENDPOINT = import.meta.env.VITE_SIGNUP_ENDPOINT ?? '/auth/signup'
 const LOGIN_ENDPOINT = import.meta.env.VITE_LOGIN_ENDPOINT ?? '/auth/login'
 const WATER_ENDPOINT = import.meta.env.VITE_WATER_ENDPOINT ?? '/water'
 const LOG_WATER_ENDPOINT = import.meta.env.VITE_LOG_WATER_ENDPOINT ?? '/water'
+const LOG_MOOD_ENDPOINT = import.meta.env.VITE_LOG_MOOD_ENDPOINT ?? '/mood'
+const MOODS_ENDPOINT = import.meta.env.VITE_MOODS_ENDPOINT ?? '/moods'
+const SUMMARY_ENDPOINT = import.meta.env.VITE_SUMMARY_ENDPOINT ?? '/summary'
 const AUTH_COOKIE_NAME = 'bloom_auth_user'
 const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24
+const MOOD_PROMPT_DONE_PREFIX = 'bloom_mood_prompt_done'
 
 function getBackgroundStyle(variableName: string, imageUrl: string): CSSProperties | undefined {
   if (!imageUrl) {
@@ -189,6 +213,7 @@ function hashToPage(hash: string): Page | null {
     normalized === 'landing' ||
     normalized === 'signup' ||
     normalized === 'login' ||
+    normalized === 'ask-mood' ||
     normalized === 'dashboard' ||
     normalized === 'activity'
   ) {
@@ -199,7 +224,7 @@ function hashToPage(hash: string): Page | null {
 }
 
 function guardPage(page: Page, isAuthenticated: boolean): Page {
-  if (!isAuthenticated && (page === 'dashboard' || page === 'activity')) {
+  if (!isAuthenticated && (page === 'ask-mood' || page === 'dashboard' || page === 'activity')) {
     return 'landing'
   }
 
@@ -221,23 +246,6 @@ function clampProgress(percentage: number) {
   return Math.max(0, Math.min(1, percentage))
 }
 
-function formatMonthHeader(dateValue: string) {
-  const basis = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date()
-  return basis.toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-function getTodayDateInputValue() {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${month}-${day}`
-}
-
 function getPlantStageLabel(stage: number) {
   if (stage >= 4) {
     return 'Blooming'
@@ -252,6 +260,41 @@ function getPlantStageLabel(stage: number) {
     return 'Seedling'
   }
   return 'Seed'
+}
+
+function getTodayDayString() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function buildMoodPromptDoneKey(userId: number, dayString: string) {
+  return `${MOOD_PROMPT_DONE_PREFIX}:${userId}:${dayString}`
+}
+
+function hasCompletedMoodPromptToday(userId: number, dayString: string) {
+  try {
+    return localStorage.getItem(buildMoodPromptDoneKey(userId, dayString)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markMoodPromptCompletedToday(userId: number, dayString: string) {
+  try {
+    localStorage.setItem(buildMoodPromptDoneKey(userId, dayString), '1')
+  } catch {
+    // Ignore storage errors in restricted browser modes.
+  }
+}
+
+function getStartOfWeekSunday(referenceDate: Date) {
+  const start = new Date(referenceDate)
+  start.setHours(0, 0, 0, 0)
+  start.setDate(referenceDate.getDate() - referenceDate.getDay())
+  return start
+}
+
+function toDayString(value: Date) {
+  return value.toISOString().slice(0, 10)
 }
 
 function App() {
@@ -275,12 +318,22 @@ function App() {
   const [isSubmittingSignup, setIsSubmittingSignup] = useState(false)
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false)
 
-  const [selectedWaterDate, setSelectedWaterDate] = useState(getTodayDateInputValue())
   const [waterSummary, setWaterSummary] = useState<WaterSummaryResponse | null>(null)
+  const [dailySummary, setDailySummary] = useState<DailySummaryResponse | null>(null)
+  const [weekActivity, setWeekActivity] = useState<WeekActivityDay[]>([])
+  const [moodLogs, setMoodLogs] = useState<MoodLog[]>([])
   const [waterError, setWaterError] = useState('')
-  const [isLoadingWater, setIsLoadingWater] = useState(false)
+  const [moodError, setMoodError] = useState('')
+  const [isLoadingDailyData, setIsLoadingDailyData] = useState(false)
   const [waterAmountInput, setWaterAmountInput] = useState('8')
+  const [moodInput, setMoodInput] = useState('Calm')
+  const [askMoodSelection, setAskMoodSelection] = useState('Calm')
+  const [isCustomAskMood, setIsCustomAskMood] = useState(false)
+  const [askMoodCustomText, setAskMoodCustomText] = useState('')
   const [isLoggingWater, setIsLoggingWater] = useState(false)
+  const [isLoggingMood, setIsLoggingMood] = useState(false)
+  const [isSubmittingAskMood, setIsSubmittingAskMood] = useState(false)
+  const [askMoodError, setAskMoodError] = useState('')
   const [activityMessage, setActivityMessage] = useState('')
   const [activityError, setActivityError] = useState('')
   const [heroImageVisible, setHeroImageVisible] = useState(true)
@@ -290,8 +343,24 @@ function App() {
 
   const signupUrl = useMemo(() => getApiUrl(SIGNUP_ENDPOINT), [])
   const loginUrl = useMemo(() => getApiUrl(LOGIN_ENDPOINT), [])
-  const waterUrl = useMemo(() => getApiUrl(WATER_ENDPOINT), [])
   const logWaterUrl = useMemo(() => getApiUrl(LOG_WATER_ENDPOINT), [])
+  const logMoodUrl = useMemo(() => getApiUrl(LOG_MOOD_ENDPOINT), [])
+  const moodsUrl = useMemo(() => getApiUrl(MOODS_ENDPOINT), [])
+  const summaryUrl = useMemo(() => getApiUrl(SUMMARY_ENDPOINT), [])
+
+  function applySummaryState(summary: DailySummaryResponse) {
+    setDailySummary(summary)
+    setMoodLogs(summary.moods ?? [])
+    setWaterSummary({
+      userid: summary.userid,
+      date: summary.date,
+      goal: summary.goal,
+      amount_logged: summary.amount_logged,
+      percentage: summary.percentage,
+      plant_stage: summary.plant_stage,
+      water_logs: summary.water_logs,
+    })
+  }
 
   useEffect(() => {
     if (authUser) {
@@ -305,7 +374,15 @@ function App() {
     const applyUrlState = () => {
       const fromHash = hashToPage(window.location.hash)
       const fallbackPage = authUser ? 'dashboard' : 'landing'
-      const guardedPage = guardPage(fromHash ?? fallbackPage, Boolean(authUser))
+      const basePage = guardPage(fromHash ?? fallbackPage, Boolean(authUser))
+
+      let guardedPage = basePage
+      if (authUser?.userid && (basePage === 'dashboard' || basePage === 'activity')) {
+        const today = getTodayDayString()
+        if (!hasCompletedMoodPromptToday(authUser.userid, today)) {
+          guardedPage = 'ask-mood'
+        }
+      }
 
       setPage(guardedPage)
 
@@ -324,36 +401,99 @@ function App() {
     }
   }, [authUser])
 
-  async function fetchWaterSummary() {
+  async function fetchWeekActivityData(userId: number) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const start = getStartOfWeekSunday(today)
+    const labels = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+    const days = Array.from({ length: 7 }).map((_, index) => {
+      const dateValue = new Date(start)
+      dateValue.setDate(start.getDate() + index)
+      const dayString = toDayString(dateValue)
+
+      return {
+        key: `${dayString}-${index}`,
+        label: labels[index],
+        date: dayString,
+        hasActivity: false,
+        isToday: dayString === toDayString(today),
+      }
+    })
+
+    try {
+      const results = await Promise.all(
+        days.map(async (day) => {
+          const request = new URL(summaryUrl)
+          request.searchParams.set('userid', String(userId))
+          request.searchParams.set('date', day.date)
+
+          const response = await fetch(request.toString())
+          if (!response.ok) {
+            return { date: day.date, hasActivity: false }
+          }
+
+          const payload = (await response.json()) as DailySummaryResponse
+          const hasActivity = payload.amount_logged > 0 || payload.moods_logged > 0
+          return { date: day.date, hasActivity }
+        })
+      )
+
+      const map = new Map(results.map((item) => [item.date, item.hasActivity]))
+      setWeekActivity(days.map((day) => ({ ...day, hasActivity: Boolean(map.get(day.date)) })))
+    } catch {
+      setWeekActivity(days)
+    }
+  }
+
+  async function fetchDailyData() {
     if (!authUser?.userid) {
       setWaterSummary(null)
+      setDailySummary(null)
+      setMoodLogs([])
+      setWeekActivity([])
       setWaterError('No logged-in user was found for hydration lookup.')
       return
     }
 
-    const requestUrl = new URL(waterUrl)
-    requestUrl.searchParams.set('userid', String(authUser.userid))
-    if (selectedWaterDate) {
-      requestUrl.searchParams.set('date', selectedWaterDate)
-    }
+    const requestSummaryUrl = new URL(summaryUrl)
+    requestSummaryUrl.searchParams.set('userid', String(authUser.userid))
+
+    const requestMoodsUrl = new URL(moodsUrl)
+    requestMoodsUrl.searchParams.set('userid', String(authUser.userid))
 
     try {
-      setIsLoadingWater(true)
+      setIsLoadingDailyData(true)
       setWaterError('')
+      setMoodError('')
 
-      const response = await fetch(requestUrl.toString())
+      const response = await fetch(requestSummaryUrl.toString())
       if (!response.ok) {
-        throw new Error(`Unable to load hydration data (${response.status}).`)
+        throw new Error(`Unable to load summary data (${response.status}).`)
       }
 
-      const data = (await response.json()) as WaterSummaryResponse
-      setWaterSummary(data)
+      const summaryData = (await response.json()) as DailySummaryResponse
+      applySummaryState(summaryData)
+      await fetchWeekActivityData(authUser.userid)
+
+      const moodsResponse = await fetch(requestMoodsUrl.toString())
+      if (moodsResponse.ok) {
+        const moodsPayload = (await moodsResponse.json()) as { moods?: MoodLog[] }
+        if (Array.isArray(moodsPayload.moods)) {
+          setMoodLogs(moodsPayload.moods)
+        }
+      } else {
+        setMoodError(`Unable to load moods (${moodsResponse.status}).`)
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to load hydration data.'
+      const message = error instanceof Error ? error.message : 'Unable to load summary data.'
       setWaterSummary(null)
+      setDailySummary(null)
+      setMoodLogs([])
+      setWeekActivity([])
       setWaterError(message)
     } finally {
-      setIsLoadingWater(false)
+      setIsLoadingDailyData(false)
     }
   }
 
@@ -361,8 +501,8 @@ function App() {
     if (page !== 'dashboard' && page !== 'activity') {
       return
     }
-    void fetchWaterSummary()
-  }, [page, authUser?.userid, selectedWaterDate])
+    void fetchDailyData()
+  }, [page, authUser?.userid])
 
   useEffect(() => {
     const plantStage = waterSummary?.plant_stage ?? 0
@@ -413,10 +553,12 @@ function App() {
       }
 
       if (payload && typeof payload.summary === 'object' && payload.summary) {
-        setWaterSummary(payload.summary as WaterSummaryResponse)
+        applySummaryState(payload.summary as DailySummaryResponse)
       } else {
-        await fetchWaterSummary()
+        await fetchDailyData()
       }
+
+      await fetchWeekActivityData(authUser.userid)
 
       setActivityMessage(`Logged ${parsedAmount} oz successfully.`)
     } catch (error) {
@@ -425,6 +567,116 @@ function App() {
       setActivityMessage('')
     } finally {
       setIsLoggingWater(false)
+    }
+  }
+
+  async function handleLogMood(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!authUser?.userid) {
+      setActivityError('You must be logged in to log a mood.')
+      return
+    }
+
+    const moodValue = moodInput.trim()
+    if (!moodValue) {
+      setActivityError('Select or enter a mood before logging.')
+      return
+    }
+
+    try {
+      setIsLoggingMood(true)
+      setActivityError('')
+      setActivityMessage('Logging mood...')
+
+      const response = await fetch(logMoodUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mood: moodValue,
+          userid: authUser.userid,
+        }),
+      })
+
+      const payload = await response.json()
+
+      if (!response.ok) {
+        const backendMessage =
+          (payload && typeof payload.message === 'string' && payload.message) ||
+          (payload && typeof payload.detail === 'string' && payload.detail) ||
+          ''
+        throw new Error(backendMessage || 'Unable to log mood right now.')
+      }
+
+      if (payload && typeof payload.summary === 'object' && payload.summary) {
+        applySummaryState(payload.summary as DailySummaryResponse)
+      } else {
+        await fetchDailyData()
+      }
+
+      await fetchWeekActivityData(authUser.userid)
+
+      setActivityMessage(`Logged mood: ${moodValue}.`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to log mood right now.'
+      setActivityError(message)
+      setActivityMessage('')
+    } finally {
+      setIsLoggingMood(false)
+    }
+  }
+
+  function getPostLoginPage(userId: number): Page {
+    const today = getTodayDayString()
+    return hasCompletedMoodPromptToday(userId, today) ? 'dashboard' : 'ask-mood'
+  }
+
+  async function handleAskMoodContinue() {
+    if (!authUser?.userid) {
+      return
+    }
+
+    const selectedMood = isCustomAskMood ? askMoodCustomText.trim() : askMoodSelection.trim()
+    if (!selectedMood) {
+      setAskMoodError('Choose a mood or type one to continue.')
+      return
+    }
+
+    try {
+      setIsSubmittingAskMood(true)
+      setAskMoodError('')
+
+      const response = await fetch(logMoodUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mood: selectedMood,
+          userid: authUser.userid,
+        }),
+      })
+
+      const payload = await response.json()
+      if (!response.ok) {
+        const backendMessage =
+          (payload && typeof payload.message === 'string' && payload.message) ||
+          (payload && typeof payload.detail === 'string' && payload.detail) ||
+          ''
+        throw new Error(backendMessage || 'Unable to save your mood right now.')
+      }
+
+      if (payload && typeof payload.summary === 'object' && payload.summary) {
+        applySummaryState(payload.summary as DailySummaryResponse)
+      }
+
+      markMoodPromptCompletedToday(authUser.userid, getTodayDayString())
+      setMoodInput(selectedMood)
+      await fetchWeekActivityData(authUser.userid)
+      navigateTo('dashboard', { replace: true, ignoreAuthGuard: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save your mood right now.'
+      setAskMoodError(message)
+    } finally {
+      setIsSubmittingAskMood(false)
     }
   }
 
@@ -452,9 +704,14 @@ function App() {
   function handleLogout() {
     setAuthUser(null)
     setWaterSummary(null)
+    setDailySummary(null)
+    setWeekActivity([])
+    setMoodLogs([])
     setWaterError('')
+    setMoodError('')
     setActivityError('')
     setActivityMessage('')
+    setAskMoodError('')
     setNavMenuOpen(false)
     setProfileMenuOpen(false)
     navigateTo('landing', { replace: true, ignoreAuthGuard: true })
@@ -573,7 +830,7 @@ function App() {
       setAuthUser({ userid: userId, name: userName, email: userEmail })
       setStatusMessage('Login successful. Welcome back.')
       setIsErrorMessage(false)
-      navigateTo('dashboard', { ignoreAuthGuard: true })
+      navigateTo(getPostLoginPage(userId), { ignoreAuthGuard: true })
     } catch (error) {
       const fallback = 'Something went wrong while logging in.'
       const message = error instanceof Error ? error.message : fallback
@@ -766,25 +1023,29 @@ function App() {
     )
   }
 
-  function renderProgressBar(label: string, percentage: number, variant: 'blue' | 'green' | 'gold') {
-    const segmentCount = 12
-    const filledSegments = Math.round(clampProgress(percentage) * segmentCount)
-
+  function renderAskMood() {
     return (
-      <div className={`progress-card ${variant}`}>
-        <div className="progress-card-title">{label}</div>
-        <div className="progress-card-track">
-          {Array.from({ length: segmentCount }).map((_, index) => (
-            <span key={`${label}-${index}`} className={index < filledSegments ? 'filled' : ''} />
-          ))}
-        </div>
-      </div>
+      <AskMoodPage
+        greetingName={authUser?.name ?? 'Bloom User'}
+        selectedMood={askMoodSelection}
+        customMoodEnabled={isCustomAskMood}
+        customMoodText={askMoodCustomText}
+        isSubmitting={isSubmittingAskMood}
+        errorMessage={askMoodError}
+        onSelectMood={(mood) => {
+          setIsCustomAskMood(false)
+          setAskMoodSelection(mood)
+        }}
+        onToggleCustomMood={() => setIsCustomAskMood((current) => !current)}
+        onCustomMoodTextChange={setAskMoodCustomText}
+        onContinue={() => void handleAskMoodContinue()}
+      />
     )
   }
 
   function renderDashboard() {
     const hydrationRatio = clampProgress(waterSummary?.percentage ?? 0)
-    const moodRatio = clampProgress((waterSummary?.water_logs.length ?? 0) / 8)
+    const moodRatio = clampProgress((dailySummary?.moods_logged ?? moodLogs.length) / 3)
     const pageStyle = getBackgroundStyle('--dashboard-background-image', DASHBOARD_BACKGROUND_IMAGE_URL)
 
     return (
@@ -793,8 +1054,10 @@ function App() {
         navNode={renderDashboardNav('dashboard')}
         greetingName={authUser?.name ?? 'Bloom User'}
         plantNode={renderPlantStagePanel()}
-        selectedWaterDate={selectedWaterDate}
+        weekActivity={weekActivity}
+        summaryDate={dailySummary?.date ?? waterSummary?.date ?? ''}
         waterSummary={waterSummary}
+        dailySummary={dailySummary}
         waterError={waterError}
         hydrationRatio={hydrationRatio}
         moodRatio={moodRatio}
@@ -813,19 +1076,24 @@ function App() {
         navNode={renderDashboardNav('activity')}
         greetingName={authUser?.name ?? 'Bloom User'}
         plantNode={renderPlantStagePanel()}
-        selectedWaterDate={selectedWaterDate}
+        weekActivity={weekActivity}
         waterSummary={waterSummary}
+        dailySummary={dailySummary}
+        moodLogs={moodLogs}
         waterError={waterError}
+        moodError={moodError}
         activityMessage={activityMessage}
         activityError={activityError}
         isLoggingWater={isLoggingWater}
+        isLoggingMood={isLoggingMood}
         waterAmountInput={waterAmountInput}
-        isLoadingWater={isLoadingWater}
+        moodInput={moodInput}
+        isLoadingDailyData={isLoadingDailyData}
         hydrationPercentage={hydrationPercentage}
         onWaterAmountChange={setWaterAmountInput}
+        onMoodChange={setMoodInput}
         onSubmitWater={handleLogWater}
-        onRefreshWater={() => void fetchWaterSummary()}
-        onSelectedDateChange={setSelectedWaterDate}
+        onSubmitMood={handleLogMood}
       />
     )
   }
@@ -886,6 +1154,10 @@ function App() {
 
   if (page === 'activity') {
     return renderActivity()
+  }
+
+  if (page === 'ask-mood') {
+    return renderAskMood()
   }
 
   return renderLanding()

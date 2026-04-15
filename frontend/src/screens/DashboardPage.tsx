@@ -1,19 +1,49 @@
 import type { CSSProperties, FormEvent, ReactNode } from 'react'
 
 type WaterSummary = {
+  userid: number
+  date: string
   amount_logged: number
   goal: number
+  percentage: number
   plant_stage: number
   water_logs: Array<{ id: number; amount: number; created_at: string }>
 } | null
+
+type MoodLog = {
+  id: number
+  mood: string
+  created_at: string
+}
+
+type DailySummary = {
+  userid: number
+  date: string
+  goal: number
+  amount_logged: number
+  percentage: number
+  plant_stage: number
+  water_logs: Array<{ id: number; amount: number; created_at: string }>
+  moods_logged: number
+  moods: MoodLog[]
+} | null
+
+type WeekActivityDay = {
+  key: string
+  label: string
+  hasActivity: boolean
+  isToday: boolean
+}
 
 type DashboardPageProps = {
   pageStyle?: CSSProperties
   navNode: ReactNode
   greetingName: string
   plantNode: ReactNode
-  selectedWaterDate: string
+  weekActivity: WeekActivityDay[]
+  summaryDate: string
   waterSummary: WaterSummary
+  dailySummary: DailySummary
   waterError: string
   hydrationRatio: number
   moodRatio: number
@@ -36,7 +66,7 @@ function ProgressBar({ label, percentage, variant }: { label: string; percentage
   )
 }
 
-function formatMonthHeader(dateValue: string) {
+function formatSummaryHeader(dateValue: string) {
   const basis = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date()
   return basis.toLocaleDateString(undefined, {
     weekday: 'long',
@@ -51,15 +81,17 @@ export function DashboardPage({
   navNode,
   greetingName,
   plantNode,
-  selectedWaterDate,
+  weekActivity,
+  summaryDate,
   waterSummary,
+  dailySummary,
   waterError,
   hydrationRatio,
   moodRatio,
   onGoActivity,
 }: DashboardPageProps) {
   return (
-    <div className="dashboard-page" style={pageStyle}>
+    <div className="dashboard-page screen-fade-in" style={pageStyle}>
       {navNode}
 
       <main className="dashboard-main">
@@ -68,13 +100,25 @@ export function DashboardPage({
           <p>Small daily actions build long-term wellness. Your progress is updated from your latest logs.</p>
         </section>
 
+        <section className="week-summary-box" aria-label="Weekly activity summary">
+          <h2>This Week</h2>
+          <div className="week-circle-row">
+            {weekActivity.map((day) => (
+              <div key={day.key} className={`week-day-circle ${day.hasActivity ? 'is-active' : ''} ${day.isToday ? 'is-today' : ''}`}>
+                {day.label}
+              </div>
+            ))}
+          </div>
+          <p>{weekActivity.filter((day) => day.hasActivity).length} active day(s) so far this week</p>
+        </section>
+
         {plantNode}
 
         <div className="dashboard-content">
           <section className="dashboard-grid">
             <article className="calendar-card">
-              <h2>{formatMonthHeader(selectedWaterDate)}</h2>
-              <p>Calendar interactions are coming soon. Date filtering already updates hydration data.</p>
+              <h2>{formatSummaryHeader(summaryDate)}</h2>
+              <p>Daily summary synced from backend.</p>
               <div className="calendar-placeholder" aria-hidden="true">
                 {Array.from({ length: 35 }).map((_, index) => (
                   <span key={index}>{index + 1 <= 31 ? index + 1 : ''}</span>
@@ -83,11 +127,11 @@ export function DashboardPage({
             </article>
 
             <article className="tasks-card">
-              <h2>Upcoming Tasks</h2>
+              <h2>Today&apos;s Snapshot</h2>
               <ul>
-                <li>Log water at least 3 times today</li>
-                <li>Complete one mood check-in</li>
-                <li>Review your summary before bed</li>
+                <li>Plant stage: {dailySummary?.plant_stage ?? waterSummary?.plant_stage ?? 0}/4</li>
+                <li>Moods logged: {dailySummary?.moods_logged ?? dailySummary?.moods?.length ?? 0}</li>
+                <li>Water entries: {waterSummary?.water_logs.length ?? 0}</li>
               </ul>
             </article>
 
@@ -135,19 +179,24 @@ type ActivityPageProps = {
   navNode: ReactNode
   greetingName: string
   plantNode: ReactNode
-  selectedWaterDate: string
+  weekActivity: WeekActivityDay[]
   waterSummary: WaterSummary
+  dailySummary: DailySummary
+  moodLogs: MoodLog[]
   waterError: string
+  moodError: string
   activityMessage: string
   activityError: string
   isLoggingWater: boolean
+  isLoggingMood: boolean
   waterAmountInput: string
-  isLoadingWater: boolean
+  moodInput: string
+  isLoadingDailyData: boolean
   hydrationPercentage: number
   onWaterAmountChange: (value: string) => void
+  onMoodChange: (value: string) => void
   onSubmitWater: (event: FormEvent<HTMLFormElement>) => void
-  onRefreshWater: () => void
-  onSelectedDateChange: (value: string) => void
+  onSubmitMood: (event: FormEvent<HTMLFormElement>) => void
 }
 
 export function ActivityPage({
@@ -155,28 +204,45 @@ export function ActivityPage({
   navNode,
   greetingName,
   plantNode,
-  selectedWaterDate,
+  weekActivity,
   waterSummary,
+  dailySummary,
+  moodLogs,
   waterError,
+  moodError,
   activityMessage,
   activityError,
   isLoggingWater,
+  isLoggingMood,
   waterAmountInput,
-  isLoadingWater,
+  moodInput,
+  isLoadingDailyData,
   hydrationPercentage,
   onWaterAmountChange,
+  onMoodChange,
   onSubmitWater,
-  onRefreshWater,
-  onSelectedDateChange,
+  onSubmitMood,
 }: ActivityPageProps) {
   return (
-    <div className="dashboard-page" style={pageStyle}>
+    <div className="dashboard-page screen-fade-in" style={pageStyle}>
       {navNode}
 
       <main className="activity-main">
         <section className="greeting-banner">
           <h1>Good Morning, {greetingName}!</h1>
           <p>Track your activity and water, then watch your plant react as you progress.</p>
+        </section>
+
+        <section className="week-summary-box" aria-label="Weekly activity summary">
+          <h2>This Week</h2>
+          <div className="week-circle-row">
+            {weekActivity.map((day) => (
+              <div key={day.key} className={`week-day-circle ${day.hasActivity ? 'is-active' : ''} ${day.isToday ? 'is-today' : ''}`}>
+                {day.label}
+              </div>
+            ))}
+          </div>
+          <p>{weekActivity.filter((day) => day.hasActivity).length} active day(s) so far this week</p>
         </section>
 
         {plantNode}
@@ -201,18 +267,21 @@ export function ActivityPage({
               </button>
             </form>
 
-            <div className="tracker-toolbar">
-              <label htmlFor="water-date">Hydration Date</label>
-              <input
-                id="water-date"
-                type="date"
-                value={selectedWaterDate}
-                onChange={(event) => onSelectedDateChange(event.target.value)}
-              />
-              <button className="ghost-btn" onClick={onRefreshWater} disabled={isLoadingWater}>
-                {isLoadingWater ? 'Loading...' : 'Refresh'}
+            <form className="activity-form mood-form" onSubmit={onSubmitMood}>
+              <label htmlFor="mood-select">Mood</label>
+              <select id="mood-select" value={moodInput} onChange={(event) => onMoodChange(event.target.value)}>
+                <option value="Calm">Calm</option>
+                <option value="Happy">Happy</option>
+                <option value="Focused">Focused</option>
+                <option value="Tired">Tired</option>
+                <option value="Stressed">Stressed</option>
+              </select>
+              <button className="primary-action" type="submit" disabled={isLoggingMood}>
+                {isLoggingMood ? 'Saving...' : 'Log Mood'}
               </button>
-            </div>
+            </form>
+
+            {isLoadingDailyData && <p>Updating today&apos;s summary...</p>}
 
             {activityMessage && <p className="success-text">{activityMessage}</p>}
             {activityError && <p className="error-text">{activityError}</p>}
@@ -240,11 +309,19 @@ export function ActivityPage({
               </article>
               <article>
                 <h3>Mood Log</h3>
-                <p>Next step: connect to /mood POST and /moods GET endpoints.</p>
-              </article>
-              <article>
-                <h3>Daily Summary</h3>
-                <p>Next step: display /summary data with progress visuals and plant stage.</p>
+                {moodError ? (
+                  <p>{moodError}</p>
+                ) : moodLogs.length ? (
+                  <ul>
+                    {moodLogs.slice(0, 3).map((mood) => (
+                      <li key={mood.id}>
+                        <strong>{mood.mood}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No moods logged today yet.</p>
+                )}
               </article>
             </div>
 
