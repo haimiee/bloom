@@ -35,6 +35,18 @@ type WaterSummaryResponse = {
   water_logs: WaterLog[]
 }
 
+type MoodLog = {
+  id: number
+  mood: string
+  text: string | null
+  created_at: string
+}
+
+type SummaryResponse = WaterSummaryResponse & {
+  moods_logged: number
+  moods: MoodLog[]
+}
+
 type Page = 'landing' | 'signup' | 'login' | 'dashboard' | 'activity'
 
 type AuthUser = {
@@ -59,6 +71,9 @@ const SIGNUP_ENDPOINT = import.meta.env.VITE_SIGNUP_ENDPOINT ?? '/auth/signup'
 const LOGIN_ENDPOINT = import.meta.env.VITE_LOGIN_ENDPOINT ?? '/auth/login'
 const WATER_ENDPOINT = import.meta.env.VITE_WATER_ENDPOINT ?? '/water'
 const LOG_WATER_ENDPOINT = import.meta.env.VITE_LOG_WATER_ENDPOINT ?? '/water'
+const MOOD_ENDPOINT = import.meta.env.VITE_MOOD_ENDPOINT ?? '/mood'
+const MOODS_ENDPOINT = import.meta.env.VITE_MOODS_ENDPOINT ?? '/moods'
+const SUMMARY_ENDPOINT = import.meta.env.VITE_SUMMARY_ENDPOINT ?? '/summary'
 const AUTH_COOKIE_NAME = 'bloom_auth_user'
 const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24
 
@@ -283,6 +298,13 @@ function App() {
   const [isLoggingWater, setIsLoggingWater] = useState(false)
   const [activityMessage, setActivityMessage] = useState('')
   const [activityError, setActivityError] = useState('')
+  const [moodEntry, setMoodEntry] = useState('')
+  const [moodLogs, setMoodLogs] = useState<MoodLog[]>([])
+  const [summaryData, setSummaryData] = useState<SummaryResponse | null>(null)
+  const [moodMessage, setMoodMessage] = useState('')
+  const [moodError, setMoodError] = useState('')
+  const [summaryError, setSummaryError] = useState('')
+  const [isLoggingMood, setIsLoggingMood] = useState(false)
   const [heroImageVisible, setHeroImageVisible] = useState(true)
   const [plantDisplayMode, setPlantDisplayMode] = useState<'ground' | 'pot'>('ground')
   const [navMenuOpen, setNavMenuOpen] = useState(false)
@@ -292,6 +314,9 @@ function App() {
   const loginUrl = useMemo(() => getApiUrl(LOGIN_ENDPOINT), [])
   const waterUrl = useMemo(() => getApiUrl(WATER_ENDPOINT), [])
   const logWaterUrl = useMemo(() => getApiUrl(LOG_WATER_ENDPOINT), [])
+  const moodUrl = useMemo(() => getApiUrl(MOOD_ENDPOINT), [])
+  const moodsUrl = useMemo(() => getApiUrl(MOODS_ENDPOINT), [])
+  const summaryUrl = useMemo(() => getApiUrl(SUMMARY_ENDPOINT), [])
 
   useEffect(() => {
     if (authUser) {
@@ -357,11 +382,76 @@ function App() {
     }
   }
 
+  async function fetchSummary() {
+    if (!authUser?.userid) {
+      setSummaryData(null)
+      setSummaryError('')
+      return
+    }
+
+    const requestUrl = new URL(summaryUrl)
+    requestUrl.searchParams.set('userid', String(authUser.userid))
+    if (selectedWaterDate) {
+      requestUrl.searchParams.set('date', selectedWaterDate)
+    }
+
+    try {
+      setSummaryError('')
+      const response = await fetch(requestUrl.toString())
+      if (!response.ok) {
+        throw new Error(`Unable to load summary (${response.status}).`)
+      }
+      const data = (await response.json()) as SummaryResponse
+      setSummaryData(data)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load summary data.'
+      setSummaryData(null)
+      setSummaryError(message)
+    }
+  }
+
+  async function fetchMoodLogs() {
+    if (!authUser?.userid) {
+      setMoodLogs([])
+      setMoodError('')
+      return
+    }
+
+    const requestUrl = new URL(moodsUrl)
+    requestUrl.searchParams.set('userid', String(authUser.userid))
+    if (selectedWaterDate) {
+      requestUrl.searchParams.set('date', selectedWaterDate)
+    }
+
+    try {
+      setMoodError('')
+      const response = await fetch(requestUrl.toString())
+      if (!response.ok) {
+        throw new Error(`Unable to load mood logs (${response.status}).`)
+      }
+      const data = (await response.json()) as { moods: MoodLog[] }
+      setMoodLogs(data.moods ?? [])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load mood logs.'
+      setMoodLogs([])
+      setMoodError(message)
+    }
+  }
+
   useEffect(() => {
     if (page !== 'dashboard' && page !== 'activity') {
       return
     }
     void fetchWaterSummary()
+  }, [page, authUser?.userid, selectedWaterDate])
+
+  useEffect(() => {
+    if (page !== 'activity') {
+      return
+    }
+
+    void fetchSummary()
+    void fetchMoodLogs()
   }, [page, authUser?.userid, selectedWaterDate])
 
   useEffect(() => {
@@ -418,6 +508,8 @@ function App() {
         await fetchWaterSummary()
       }
 
+      await fetchSummary()
+      await fetchMoodLogs()
       setActivityMessage(`Logged ${parsedAmount} oz successfully.`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to log water right now.'
@@ -425,6 +517,57 @@ function App() {
       setActivityMessage('')
     } finally {
       setIsLoggingWater(false)
+    }
+  }
+
+  async function handleLogMood(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!authUser?.userid) {
+      setMoodError('You must be logged in to log mood.')
+      return
+    }
+
+    if (!moodEntry.trim()) {
+      setMoodError('Describe how you feel before saving.')
+      return
+    }
+
+    try {
+      setIsLoggingMood(true)
+      setMoodError('')
+      setMoodMessage('Logging mood...')
+
+      const response = await fetch(moodUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mood: moodEntry.trim(),
+          text: null,
+          userid: authUser.userid,
+        }),
+      })
+
+      const payload = await response.json()
+
+      if (!response.ok) {
+        const backendMessage =
+          (payload && typeof payload.message === 'string' && payload.message) ||
+          (payload && typeof payload.detail === 'string' && payload.detail) ||
+          ''
+        throw new Error(backendMessage || 'Unable to log mood right now.')
+      }
+
+      setMoodEntry('')
+      setMoodMessage('Mood logged successfully.')
+      await fetchSummary()
+      await fetchMoodLogs()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to log mood right now.'
+      setMoodError(message)
+      setMoodMessage('')
+    } finally {
+      setIsLoggingMood(false)
     }
   }
 
@@ -815,15 +958,22 @@ function App() {
         plantNode={renderPlantStagePanel()}
         selectedWaterDate={selectedWaterDate}
         waterSummary={waterSummary}
-        waterError={waterError}
+        summaryData={summaryData}
+        moodEntry={moodEntry}
+        moodLogs={moodLogs}
+        moodMessage={moodMessage}
+        moodError={moodError}
         activityMessage={activityMessage}
         activityError={activityError}
         isLoggingWater={isLoggingWater}
+        isLoggingMood={isLoggingMood}
         waterAmountInput={waterAmountInput}
         isLoadingWater={isLoadingWater}
         hydrationPercentage={hydrationPercentage}
         onWaterAmountChange={setWaterAmountInput}
+        onMoodChange={setMoodEntry}
         onSubmitWater={handleLogWater}
+        onSubmitMood={handleLogMood}
         onRefreshWater={() => void fetchWaterSummary()}
         onSelectedDateChange={setSelectedWaterDate}
       />

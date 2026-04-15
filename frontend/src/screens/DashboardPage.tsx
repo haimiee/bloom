@@ -1,4 +1,4 @@
-import type { CSSProperties, FormEvent, ReactNode } from 'react'
+import { useEffect, useState, type ChangeEvent, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 
 type WaterSummary = {
   amount_logged: number
@@ -6,6 +6,33 @@ type WaterSummary = {
   plant_stage: number
   water_logs: Array<{ id: number; amount: number; created_at: string }>
 } | null
+
+type MoodLog = {
+  id: number
+  mood: string
+  text: string | null
+  created_at: string
+}
+
+type SummaryData = {
+  userid: number
+  date: string
+  goal: number
+  amount_logged: number
+  percentage: number
+  plant_stage: number
+  water_logs: Array<{ id: number; amount: number; created_at: string }>
+  moods_logged: number
+  moods: MoodLog[]
+}
+
+const moodOptions = [
+  { value: '😊 Happy', label: '😊 Happy' },
+  { value: '😌 Calm', label: '😌 Calm' },
+  { value: '😴 Tired', label: '😴 Tired' },
+  { value: '😟 Anxious', label: '😟 Anxious' },
+  { value: '💪 Energized', label: '💪 Energized' },
+]
 
 type DashboardPageProps = {
   pageStyle?: CSSProperties
@@ -137,15 +164,23 @@ type ActivityPageProps = {
   plantNode: ReactNode
   selectedWaterDate: string
   waterSummary: WaterSummary
+  summaryData: SummaryData | null
+  moodEntry: string
+  moodLogs: MoodLog[]
+  moodMessage: string
+  moodError: string
   waterError: string
   activityMessage: string
   activityError: string
   isLoggingWater: boolean
+  isLoggingMood: boolean
   waterAmountInput: string
   isLoadingWater: boolean
   hydrationPercentage: number
   onWaterAmountChange: (value: string) => void
+  onMoodChange: (value: string) => void
   onSubmitWater: (event: FormEvent<HTMLFormElement>) => void
+  onSubmitMood: (event: FormEvent<HTMLFormElement>) => void
   onRefreshWater: () => void
   onSelectedDateChange: (value: string) => void
 }
@@ -158,17 +193,69 @@ export function ActivityPage({
   selectedWaterDate,
   waterSummary,
   waterError,
+  summaryData,
+  moodEntry,
+  moodLogs,
+  moodMessage,
+  moodError,
   activityMessage,
   activityError,
   isLoggingWater,
+  isLoggingMood,
   waterAmountInput,
   isLoadingWater,
   hydrationPercentage,
   onWaterAmountChange,
+  onMoodChange,
   onSubmitWater,
+  onSubmitMood,
   onRefreshWater,
   onSelectedDateChange,
 }: ActivityPageProps) {
+  const [selectedMoodOption, setSelectedMoodOption] = useState<string>(
+    moodOptions.some((option) => option.value === moodEntry) ? moodEntry : moodEntry ? 'custom' : ''
+  )
+  const [customMoodText, setCustomMoodText] = useState<string>(
+    moodOptions.some((option) => option.value === moodEntry) ? '' : moodEntry
+  )
+
+  useEffect(() => {
+    if (moodOptions.some((option) => option.value === moodEntry)) {
+      setSelectedMoodOption(moodEntry)
+      setCustomMoodText('')
+      return
+    }
+
+    if (moodEntry) {
+      setSelectedMoodOption('custom')
+      setCustomMoodText(moodEntry)
+      return
+    }
+
+    setSelectedMoodOption('')
+    setCustomMoodText('')
+  }, [moodEntry])
+
+  function handleMoodSelect(event: React.ChangeEvent<HTMLSelectElement>) {
+    const value = event.target.value
+    setSelectedMoodOption(value)
+
+    if (value === 'custom') {
+      setCustomMoodText('')
+      onMoodChange('')
+      return
+    }
+
+    setCustomMoodText('')
+    onMoodChange(value)
+  }
+
+  function handleCustomMoodChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.target.value
+    setCustomMoodText(input)
+    onMoodChange(input)
+  }
+
   return (
     <div className="dashboard-page" style={pageStyle}>
       {navNode}
@@ -201,21 +288,41 @@ export function ActivityPage({
               </button>
             </form>
 
-            <div className="tracker-toolbar">
-              <label htmlFor="water-date">Hydration Date</label>
-              <input
-                id="water-date"
-                type="date"
-                value={selectedWaterDate}
-                onChange={(event) => onSelectedDateChange(event.target.value)}
-              />
-              <button className="ghost-btn" onClick={onRefreshWater} disabled={isLoadingWater}>
-                {isLoadingWater ? 'Loading...' : 'Refresh'}
+            <form className="activity-form" onSubmit={onSubmitMood}>
+              <label htmlFor="mood-choice">Select your mood</label>
+              <select id="mood-choice" value={selectedMoodOption} onChange={handleMoodSelect}>
+                <option value="">Choose a mood</option>
+                {moodOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+                <option value="custom">Create new mood</option>
+              </select>
+
+              {selectedMoodOption === 'custom' && (
+                <label htmlFor="custom-mood">Describe your mood</label>
+              )}
+
+              {selectedMoodOption === 'custom' ? (
+                <input
+                  id="custom-mood"
+                  type="text"
+                  value={customMoodText}
+                  onChange={handleCustomMoodChange}
+                  placeholder="Type your custom mood"
+                />
+              ) : null}
+
+              <button className="secondary-action" type="submit" disabled={isLoggingMood}>
+                {isLoggingMood ? 'Saving...' : 'Log Mood'}
               </button>
-            </div>
+            </form>
 
             {activityMessage && <p className="success-text">{activityMessage}</p>}
             {activityError && <p className="error-text">{activityError}</p>}
+            {moodMessage && <p className="success-text">{moodMessage}</p>}
+            {moodError && <p className="error-text">{moodError}</p>}
 
             <div className="tracker-grid">
               <article>
@@ -240,11 +347,45 @@ export function ActivityPage({
               </article>
               <article>
                 <h3>Mood Log</h3>
-                <p>Next step: connect to /mood POST and /moods GET endpoints.</p>
+                {moodLogs.length ? (
+                  <ul>
+                    {moodLogs.map((log) => (
+                      <li key={log.id}>
+                        <span>{log.mood}</span>
+                        <span>{new Date(log.created_at).toLocaleTimeString()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No mood entries for this date yet.</p>
+                )}
               </article>
               <article>
                 <h3>Daily Summary</h3>
-                <p>Next step: display /summary data with progress visuals and plant stage.</p>
+                {summaryData ? (
+                  <>
+                    <p>
+                      Plant Stage: <strong>{summaryData.plant_stage}</strong>
+                    </p>
+                    <p>
+                      Hydration: {summaryData.amount_logged} / {summaryData.goal} oz
+                    </p>
+                    <p>Mood entries: {summaryData.moods.length}</p>
+                    <ProgressBar label="Hydration" percentage={summaryData.percentage} variant="blue" />
+                    <ProgressBar
+                      label="Mood Activity"
+                      percentage={Math.min(1, summaryData.moods.length / 3)}
+                      variant="green"
+                    />
+                    <ProgressBar
+                      label="Consistency Score"
+                      percentage={(summaryData.percentage + Math.min(1, summaryData.moods.length / 3)) / 2}
+                      variant="gold"
+                    />
+                  </>
+                ) : (
+                  <p>No summary available yet.</p>
+                )}
               </article>
             </div>
 
