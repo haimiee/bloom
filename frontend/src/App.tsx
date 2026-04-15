@@ -297,6 +297,21 @@ function toDayString(value: Date) {
   return value.toISOString().slice(0, 10)
 }
 
+function getTimeOfDayGreeting() {
+  const hour = new Date().getHours()
+
+  if (hour >= 18) {
+    return 'Good Evening'
+  }
+  if (hour >= 12) {
+    return 'Good Afternoon'
+  }
+  if (hour >= 5) {
+    return 'Good Morning'
+  }
+  return 'Good Night'
+}
+
 function App() {
   const [page, setPage] = useState<Page>(() => getInitialPage(Boolean(loadAuthUserFromCookie())))
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUserFromCookie())
@@ -1047,11 +1062,13 @@ function App() {
     const hydrationRatio = clampProgress(waterSummary?.percentage ?? 0)
     const moodRatio = clampProgress((dailySummary?.moods_logged ?? moodLogs.length) / 3)
     const pageStyle = getBackgroundStyle('--dashboard-background-image', DASHBOARD_BACKGROUND_IMAGE_URL)
+    const greeting = getTimeOfDayGreeting()
 
     return (
       <DashboardPage
         pageStyle={pageStyle}
         navNode={renderDashboardNav('dashboard')}
+        greetingText={greeting}
         greetingName={authUser?.name ?? 'Bloom User'}
         plantNode={renderPlantStagePanel()}
         weekActivity={weekActivity}
@@ -1069,11 +1086,13 @@ function App() {
   function renderActivity() {
     const hydrationPercentage = Math.round(clampProgress(waterSummary?.percentage ?? 0) * 100)
     const pageStyle = getBackgroundStyle('--dashboard-background-image', DASHBOARD_BACKGROUND_IMAGE_URL)
+    const greeting = getTimeOfDayGreeting()
 
     return (
       <ActivityPage
         pageStyle={pageStyle}
         navNode={renderDashboardNav('activity')}
+        greetingText={greeting}
         greetingName={authUser?.name ?? 'Bloom User'}
         plantNode={renderPlantStagePanel()}
         weekActivity={weekActivity}

@@ -38,6 +38,7 @@ type WeekActivityDay = {
 type DashboardPageProps = {
   pageStyle?: CSSProperties
   navNode: ReactNode
+  greetingText: string
   greetingName: string
   plantNode: ReactNode
   weekActivity: WeekActivityDay[]
@@ -79,6 +80,7 @@ function formatSummaryHeader(dateValue: string) {
 export function DashboardPage({
   pageStyle,
   navNode,
+  greetingText,
   greetingName,
   plantNode,
   weekActivity,
@@ -96,7 +98,7 @@ export function DashboardPage({
 
       <main className="dashboard-main">
         <section className="greeting-banner">
-          <h1>Good Morning, {greetingName}!</h1>
+          <h1>{greetingText}, {greetingName}!</h1>
           <p>Small daily actions build long-term wellness. Your progress is updated from your latest logs.</p>
         </section>
 
@@ -177,6 +179,7 @@ export function DashboardPage({
 type ActivityPageProps = {
   pageStyle?: CSSProperties
   navNode: ReactNode
+  greetingText: string
   greetingName: string
   plantNode: ReactNode
   weekActivity: WeekActivityDay[]
@@ -202,6 +205,7 @@ type ActivityPageProps = {
 export function ActivityPage({
   pageStyle,
   navNode,
+  greetingText,
   greetingName,
   plantNode,
   weekActivity,
@@ -229,7 +233,7 @@ export function ActivityPage({
 
       <main className="activity-main">
         <section className="greeting-banner">
-          <h1>Good Morning, {greetingName}!</h1>
+          <h1>{greetingText}, {greetingName}!</h1>
           <p>Track your activity and water, then watch your plant react as you progress.</p>
         </section>
 
