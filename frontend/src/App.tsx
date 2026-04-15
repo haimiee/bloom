@@ -1,5 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import './App.css'
+import LandingPage from './screens/LandingPage'
+import LoginPage from './screens/LoginPage'
+import SignupPage from './screens/SignupPage'
+import { ActivityPage, DashboardPage } from './screens/DashboardPage'
 
 type AuthFieldErrors = {
   name?: string
@@ -583,120 +587,22 @@ function App() {
 
   function renderLanding() {
     return (
-      <div className="landing-page">
-        <header className="landing-nav">
-          {renderBloomLogo('nav')}
-          <nav>
-            <button className="nav-btn" onClick={() => goToPage('signup')}>
-              Sign Up
-            </button>
-            <button className="nav-btn" onClick={() => goToPage('login')}>
-              Log In
-            </button>
-          </nav>
-        </header>
-
-        <section className="hero-section">
-          <div className="hero-art" aria-label="Landing art by Bloom frontend design team">
-            {heroImageVisible && (
-              <img
-                src={LANDING_HERO_IMAGE_URL}
-                alt="Landing art"
-                onError={() => setHeroImageVisible(false)}
-                loading="lazy"
-              />
-            )}
-          </div>
-          <article className="hero-card">
-            <h1>Change The Way You Approach Your Health</h1>
-            <p>
-              Bloom helps you track hydration and mood with a friendlier, lower-pressure approach to daily
-              wellness.
-            </p>
-            <button className="cta-btn" onClick={() => goToPage('signup')}>
-              Sign Up
-            </button>
-          </article>
-        </section>
-
-        <section className="values-band">
-          <div className="value-card">
-            <h2>Vibrant</h2>
-            <p>Connection</p>
-          </div>
-          <div className="value-card">
-            <h2>Authentic</h2>
-            <p>Expression</p>
-          </div>
-          <div className="value-card">
-            <h2>Honest</h2>
-            <p>Wellness</p>
-          </div>
-        </section>
-
-        <section className="about-section">
-          <div className="about-panel">
-            <h2>About Us</h2>
-            <p>
-              We are a Girls Who Code team building a more approachable way to track health. Bloom is designed to
-              feel supportive, social, and realistic for everyday life.
-            </p>
-          </div>
-          <div className="about-copy">
-            <h3>An Accessible Tool That Makes Health... Approachable.</h3>
-            <p>
-              Join a judgment-free space focused on progress over perfection. We make wellness feel human.
-            </p>
-          </div>
-        </section>
-
-        <section className="features-section">
-          <h2>What Makes Us Different?</h2>
-          <p>A social approach to wellness</p>
-          <div className="feature-grid">
-            <article className="feature-card">
-              <h3>Conversation</h3>
-              <p>Share experiences, emotions, and progress with supportive people.</p>
-            </article>
-            <article className="feature-card">
-              <h3>Tracking / Logging</h3>
-              <p>Use simple tools to monitor goals with consistency and clarity.</p>
-            </article>
-            <article className="feature-card">
-              <h3>Avatar Creation</h3>
-              <p>Express your identity in a way that makes your wellness journey yours.</p>
-            </article>
-            <article className="feature-card">
-              <h3>Friendly Competition</h3>
-              <p>Motivation through growth-focused points and challenge systems.</p>
-            </article>
-          </div>
-        </section>
-
-        <section className="join-band">
-          <h2>Join The Bloom Squad!</h2>
-          <div className="join-actions">
-            <button className="join-btn" onClick={() => goToPage('signup')}>
-              Create Account
-            </button>
-            <button className="ghost-btn" onClick={() => goToPage('login')}>
-              Existing User Log In
-            </button>
-          </div>
-        </section>
-      </div>
+      <LandingPage
+        logoNode={renderBloomLogo('nav')}
+        heroImageVisible={heroImageVisible}
+        landingHeroImageUrl={LANDING_HERO_IMAGE_URL}
+        onHeroImageError={() => setHeroImageVisible(false)}
+        onGoSignUp={() => goToPage('signup')}
+        onGoLogin={() => goToPage('login')}
+      />
     )
   }
 
   function renderBloomLogo(mode: 'nav' | 'auth') {
     return (
-      <button
-        className={`bloom-logo ${mode}`}
-        onClick={() => navigateTo('landing', { ignoreAuthGuard: true })}
-        aria-label="Go to landing page"
-      >
+      <span className={`bloom-logo ${mode}`} aria-label="Bloom">
         Bloom
-      </button>
+      </span>
     )
   }
 
@@ -882,74 +788,18 @@ function App() {
     const pageStyle = getBackgroundStyle('--dashboard-background-image', DASHBOARD_BACKGROUND_IMAGE_URL)
 
     return (
-      <div className="dashboard-page" style={pageStyle}>
-        {renderDashboardNav('dashboard')}
-
-        <main className="dashboard-main">
-          <section className="greeting-banner">
-            <h1>Good Morning, {authUser?.name ?? 'Bloom User'}!</h1>
-            <p>Small daily actions build long-term wellness. Your progress is updated from your latest logs.</p>
-          </section>
-
-          {renderPlantStagePanel()}
-
-          <div className="dashboard-content">
-            <section className="dashboard-grid">
-              <article className="calendar-card">
-                <h2>{formatMonthHeader(selectedWaterDate)}</h2>
-                <p>Calendar interactions are coming soon. Date filtering already updates hydration data.</p>
-                <div className="calendar-placeholder" aria-hidden="true">
-                  {Array.from({ length: 35 }).map((_, index) => (
-                    <span key={index}>{index + 1 <= 31 ? index + 1 : ''}</span>
-                  ))}
-                </div>
-              </article>
-
-              <article className="tasks-card">
-                <h2>Upcoming Tasks</h2>
-                <ul>
-                  <li>Log water at least 3 times today</li>
-                  <li>Complete one mood check-in</li>
-                  <li>Review your summary before bed</li>
-                </ul>
-              </article>
-
-              <article className="friends-card">
-                <h2>Your Friends</h2>
-                <p>Community feed and friend comparisons will be added in a later milestone.</p>
-                <div className="friend-snapshot">
-                  <div className="friend-avatar" />
-                  <div>
-                    <p className="friend-name">Wellness Buddy</p>
-                    <p className="friend-note">Hydration streak active</p>
-                  </div>
-                </div>
-              </article>
-            </section>
-
-            <section className="progress-stack">
-              {renderProgressBar('Hydration Progress', hydrationRatio, 'blue')}
-              {renderProgressBar('Activity Progress', moodRatio, 'green')}
-              {renderProgressBar('Consistency Score', (hydrationRatio + moodRatio) / 2, 'gold')}
-            </section>
-
-            <section className="dashboard-actions">
-              <button className="join-btn" onClick={() => navigateTo('activity', { ignoreAuthGuard: true })}>
-                Go To Activity Logging
-              </button>
-              <div className="dashboard-meta">
-                {waterError ? (
-                  <p className="error-text">{waterError}</p>
-                ) : (
-                  <p>
-                    Latest hydration: {waterSummary?.amount_logged ?? 0} / {waterSummary?.goal ?? 64} oz
-                  </p>
-                )}
-              </div>
-            </section>
-          </div>
-        </main>
-      </div>
+      <DashboardPage
+        pageStyle={pageStyle}
+        navNode={renderDashboardNav('dashboard')}
+        greetingName={authUser?.name ?? 'Bloom User'}
+        plantNode={renderPlantStagePanel()}
+        selectedWaterDate={selectedWaterDate}
+        waterSummary={waterSummary}
+        waterError={waterError}
+        hydrationRatio={hydrationRatio}
+        moodRatio={moodRatio}
+        onGoActivity={() => navigateTo('activity', { ignoreAuthGuard: true })}
+      />
     )
   }
 
@@ -958,277 +808,67 @@ function App() {
     const pageStyle = getBackgroundStyle('--dashboard-background-image', DASHBOARD_BACKGROUND_IMAGE_URL)
 
     return (
-      <div className="dashboard-page" style={pageStyle}>
-        {renderDashboardNav('activity')}
-
-        <main className="activity-main">
-          <section className="greeting-banner">
-            <h1>Good Morning, {authUser?.name ?? 'Bloom User'}!</h1>
-            <p>Track your activity and water, then watch your plant react as you progress.</p>
-          </section>
-
-          {renderPlantStagePanel()}
-
-          <div className="activity-content">
-            <section className="activity-card">
-              <h1>Activity Logging</h1>
-              <p>Log what you do now. Calendar interactions and extra activities can be layered in next.</p>
-
-              <form className="activity-form" onSubmit={handleLogWater}>
-                <label htmlFor="water-amount">Water Amount (oz)</label>
-                <input
-                  id="water-amount"
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={waterAmountInput}
-                  onChange={(event) => setWaterAmountInput(event.target.value)}
-                />
-                <button className="primary-action" type="submit" disabled={isLoggingWater}>
-                  {isLoggingWater ? 'Saving...' : 'Log Water'}
-                </button>
-              </form>
-
-              <div className="tracker-toolbar">
-                <label htmlFor="water-date">Hydration Date</label>
-                <input
-                  id="water-date"
-                  type="date"
-                  value={selectedWaterDate}
-                  onChange={(event) => setSelectedWaterDate(event.target.value)}
-                />
-                <button className="ghost-btn" onClick={() => void fetchWaterSummary()} disabled={isLoadingWater}>
-                  {isLoadingWater ? 'Loading...' : 'Refresh'}
-                </button>
-              </div>
-
-              {activityMessage && <p className="success-text">{activityMessage}</p>}
-              {activityError && <p className="error-text">{activityError}</p>}
-
-              <div className="tracker-grid">
-                <article>
-                  <h3>Hydration Log</h3>
-                  {waterError ? (
-                    <p>{waterError}</p>
-                  ) : (
-                    <>
-                      <p>
-                        {waterSummary
-                          ? `${waterSummary.amount_logged} oz of ${waterSummary.goal} oz (${hydrationPercentage}%)`
-                          : 'No hydration summary available yet.'}
-                      </p>
-                      <p>
-                        Plant Stage: <strong>{waterSummary?.plant_stage ?? 0}</strong>
-                      </p>
-                      <p>
-                        Entries Today: <strong>{waterSummary?.water_logs.length ?? 0}</strong>
-                      </p>
-                    </>
-                  )}
-                </article>
-                <article>
-                  <h3>Mood Log</h3>
-                  <p>Next step: connect to /mood POST and /moods GET endpoints.</p>
-                </article>
-                <article>
-                  <h3>Daily Summary</h3>
-                  <p>Next step: display /summary data with progress visuals and plant stage.</p>
-                </article>
-              </div>
-
-              <div className="water-log-list">
-                <h3>Water Entries</h3>
-                {waterSummary?.water_logs.length ? (
-                  <ul>
-                    {waterSummary.water_logs.map((log) => (
-                      <li key={log.id}>
-                        <span>{log.amount} oz</span>
-                        <span>{new Date(log.created_at).toLocaleTimeString()}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>No water entries for this date yet.</p>
-                )}
-              </div>
-            </section>
-          </div>
-        </main>
-      </div>
+      <ActivityPage
+        pageStyle={pageStyle}
+        navNode={renderDashboardNav('activity')}
+        greetingName={authUser?.name ?? 'Bloom User'}
+        plantNode={renderPlantStagePanel()}
+        selectedWaterDate={selectedWaterDate}
+        waterSummary={waterSummary}
+        waterError={waterError}
+        activityMessage={activityMessage}
+        activityError={activityError}
+        isLoggingWater={isLoggingWater}
+        waterAmountInput={waterAmountInput}
+        isLoadingWater={isLoadingWater}
+        hydrationPercentage={hydrationPercentage}
+        onWaterAmountChange={setWaterAmountInput}
+        onSubmitWater={handleLogWater}
+        onRefreshWater={() => void fetchWaterSummary()}
+        onSelectedDateChange={setSelectedWaterDate}
+      />
     )
   }
 
   function renderSignup() {
     return (
-      <div className="auth-page">
-        <div className="auth-layout">
-          <aside className="art-panel" aria-hidden="true">
-            <div className="sprite-placeholder" />
-          </aside>
-          <section className="form-shell" aria-labelledby="signup-title">
-            {renderAuthTopBar('Create Account')}
-            <form className="signup-form" onSubmit={handleSignup} noValidate>
-              <div className="field-wrap">
-                <label htmlFor="signup-name">Your Name</label>
-                <input
-                  id="signup-name"
-                  type="text"
-                  autoComplete="name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Your Name"
-                  aria-invalid={Boolean(signupErrors.name)}
-                  aria-describedby={signupErrors.name ? 'signup-name-error' : undefined}
-                />
-                {signupErrors.name && (
-                  <p className="field-error" id="signup-name-error" role="alert">
-                    {signupErrors.name}
-                  </p>
-                )}
-              </div>
-
-              <div className="field-wrap">
-                <label htmlFor="signup-email">Email</label>
-                <input
-                  id="signup-email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Email"
-                  aria-invalid={Boolean(signupErrors.email)}
-                  aria-describedby={signupErrors.email ? 'signup-email-error' : undefined}
-                />
-                {signupErrors.email && (
-                  <p className="field-error" id="signup-email-error" role="alert">
-                    {signupErrors.email}
-                  </p>
-                )}
-              </div>
-
-              <div className="field-wrap">
-                <label htmlFor="signup-password">Password</label>
-                <div className="password-row">
-                  <input
-                    id="signup-password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Password"
-                    aria-invalid={Boolean(signupErrors.password)}
-                    aria-describedby={signupErrors.password ? 'signup-password-error' : undefined}
-                  />
-                  <button
-                    className="visibility-toggle"
-                    type="button"
-                    onClick={() => setShowPassword((current) => !current)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                {signupErrors.password && (
-                  <p className="field-error" id="signup-password-error" role="alert">
-                    {signupErrors.password}
-                  </p>
-                )}
-              </div>
-
-              <button className="primary-action" type="submit" disabled={isSubmittingSignup}>
-                {isSubmittingSignup ? 'Creating...' : 'Start Blooming'}
-              </button>
-            </form>
-
-            <p className={`status-message ${isErrorMessage ? 'error' : ''}`} role="status" aria-live="polite">
-              {statusMessage}
-            </p>
-
-            <div className="login-row">
-              <p>Have an account?</p>
-              <button className="secondary-action" type="button" onClick={() => goToPage('login')}>
-                Log In
-              </button>
-            </div>
-          </section>
-        </div>
-      </div>
+      <SignupPage
+        topBarNode={renderAuthTopBar('Create Account')}
+        name={name}
+        email={email}
+        password={password}
+        signupErrors={signupErrors}
+        statusMessage={statusMessage}
+        isErrorMessage={isErrorMessage}
+        isSubmittingSignup={isSubmittingSignup}
+        showPassword={showPassword}
+        onNameChange={setName}
+        onEmailChange={setEmail}
+        onPasswordChange={setPassword}
+        onTogglePassword={() => setShowPassword((current) => !current)}
+        onSubmit={handleSignup}
+        onGoLogin={() => goToPage('login')}
+      />
     )
   }
 
   function renderLogin() {
     return (
-      <div className="auth-page">
-        <div className="auth-layout single-column">
-          <section className="form-shell" aria-labelledby="login-title">
-            {renderAuthTopBar('Log In')}
-            <form className="signup-form" onSubmit={handleLogin} noValidate>
-              <div className="field-wrap">
-                <label htmlFor="login-email">Email</label>
-                <input
-                  id="login-email"
-                  type="email"
-                  autoComplete="email"
-                  value={loginEmail}
-                  onChange={(event) => setLoginEmail(event.target.value)}
-                  placeholder="Email"
-                  aria-invalid={Boolean(loginErrors.email)}
-                  aria-describedby={loginErrors.email ? 'login-email-error' : undefined}
-                />
-                {loginErrors.email && (
-                  <p className="field-error" id="login-email-error" role="alert">
-                    {loginErrors.email}
-                  </p>
-                )}
-              </div>
-
-              <div className="field-wrap">
-                <label htmlFor="login-password">Password</label>
-                <div className="password-row">
-                  <input
-                    id="login-password"
-                    type={showLoginPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    value={loginPassword}
-                    onChange={(event) => setLoginPassword(event.target.value)}
-                    placeholder="Password"
-                    aria-invalid={Boolean(loginErrors.password)}
-                    aria-describedby={loginErrors.password ? 'login-password-error' : undefined}
-                  />
-                  <button
-                    className="visibility-toggle"
-                    type="button"
-                    onClick={() => setShowLoginPassword((current) => !current)}
-                    aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showLoginPassword ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                {loginErrors.password && (
-                  <p className="field-error" id="login-password-error" role="alert">
-                    {loginErrors.password}
-                  </p>
-                )}
-              </div>
-
-              <button className="primary-action" type="submit" disabled={isSubmittingLogin}>
-                {isSubmittingLogin ? 'Logging In...' : 'Enter Bloom'}
-              </button>
-            </form>
-
-            <p className={`status-message ${isErrorMessage ? 'error' : ''}`} role="status" aria-live="polite">
-              {statusMessage}
-            </p>
-
-            <div className="login-row">
-              <p>Need an account?</p>
-              <button className="secondary-action" type="button" onClick={() => goToPage('signup')}>
-                Create Account
-              </button>
-            </div>
-          </section>
-        </div>
-      </div>
+      <LoginPage
+        topBarNode={renderAuthTopBar('Log In')}
+        email={loginEmail}
+        password={loginPassword}
+        loginErrors={loginErrors}
+        statusMessage={statusMessage}
+        isErrorMessage={isErrorMessage}
+        isSubmittingLogin={isSubmittingLogin}
+        showPassword={showLoginPassword}
+        onEmailChange={setLoginEmail}
+        onPasswordChange={setLoginPassword}
+        onTogglePassword={() => setShowLoginPassword((current) => !current)}
+        onSubmit={handleLogin}
+        onGoSignup={() => goToPage('signup')}
+      />
     )
   }
 
