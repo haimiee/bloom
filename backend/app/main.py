@@ -12,14 +12,25 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 # app + config
 app = FastAPI()
 
+
+def parse_csv_env(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
+ALLOWED_ORIGINS = parse_csv_env(os.environ.get("BLOOM_CORS_ORIGINS")) or DEFAULT_ALLOWED_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,6 +41,10 @@ DB_PATH = Path(__file__).resolve().parent.parent / "database.db"
 PASSWORD_HASH_ITERATIONS = 200_000
 SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24
 SESSION_SECRET = os.environ.get("BLOOM_SESSION_SECRET", "dev-session-secret-change-me")
+SESSION_COOKIE_SECURE = os.environ.get("BLOOM_SESSION_COOKIE_SECURE", "false").lower() in {"1", "true", "yes", "on"}
+SESSION_COOKIE_SAMESITE = os.environ.get("BLOOM_SESSION_COOKIE_SAMESITE", "lax").lower()
+if SESSION_COOKIE_SAMESITE not in {"lax", "strict", "none"}:
+    SESSION_COOKIE_SAMESITE = "lax"
 try:
     EASTERN_TZ = ZoneInfo("America/New_York")
 except ZoneInfoNotFoundError:
@@ -141,8 +156,8 @@ def set_auth_cookie(response: Response, userid: int):
         value=create_session_token(userid),
         max_age=SESSION_COOKIE_MAX_AGE_SECONDS,
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite=SESSION_COOKIE_SAMESITE,
+        secure=SESSION_COOKIE_SECURE,
         path="/",
     )
 
@@ -150,7 +165,7 @@ def clear_auth_cookie(response: Response):
     response.delete_cookie(
         key=AUTH_COOKIE_NAME,
         path="/",
-        samesite="lax",
+        samesite=SESSION_COOKIE_SAMESITE,
     )
 
 def get_authenticated_userid(request: Request) -> int:
