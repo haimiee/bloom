@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query, Request, Depends
+from fastapi import FastAPI, HTTPException, Query, Request, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sqlite3
@@ -6,8 +6,6 @@ from datetime import datetime, timezone
 import hashlib
 import hmac
 import os
-import json
-import urllib.parse
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -30,6 +28,8 @@ app.add_middleware(
 WATER_GOAL = 64
 DB_PATH = Path(__file__).resolve().parent.parent / "database.db"
 PASSWORD_HASH_ITERATIONS = 200_000
+SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24
+SESSION_SECRET = os.environ.get("BLOOM_SESSION_SECRET", "dev-session-secret-change-me")
 try:
     EASTERN_TZ = ZoneInfo("America/New_York")
 except ZoneInfoNotFoundError:
@@ -98,20 +98,68 @@ init_db()
 # authentication helpers
 AUTH_COOKIE_NAME = 'bloom_auth_user'
 
+def create_session_token(userid: int) -> str:
+    expires_at = int(datetime.now(timezone.utc).timestamp()) + SESSION_COOKIE_MAX_AGE_SECONDS
+    payload = f"{userid}:{expires_at}"
+    signature = hmac.new(
+        SESSION_SECRET.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{payload}:{signature}"
+
+def verify_session_token(token: str) -> int:
+    try:
+        userid_text, expires_text, signature = token.split(":", 2)
+        userid = int(userid_text)
+        expires_at = int(expires_text)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid authentication.")
+
+    if userid <= 0:
+        raise HTTPException(status_code=401, detail="Invalid authentication.")
+
+    payload = f"{userid}:{expires_at}"
+    expected_signature = hmac.new(
+        SESSION_SECRET.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(signature, expected_signature):
+        raise HTTPException(status_code=401, detail="Invalid authentication.")
+
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    if expires_at < now_ts:
+        raise HTTPException(status_code=401, detail="Session expired.")
+
+    return userid
+
+def set_auth_cookie(response: Response, userid: int):
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=create_session_token(userid),
+        max_age=SESSION_COOKIE_MAX_AGE_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        path="/",
+    )
+
+def clear_auth_cookie(response: Response):
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        path="/",
+        samesite="lax",
+    )
+
 def get_authenticated_userid(request: Request) -> int:
     """Extract authenticated user ID from auth cookie."""
     auth_cookie = request.cookies.get(AUTH_COOKIE_NAME)
     if not auth_cookie:
         raise HTTPException(status_code=401, detail="Not authenticated.")
-    
-    try:
-        user_data = json.loads(urllib.parse.unquote(auth_cookie))
-        userid = user_data.get("userid")
-        if not isinstance(userid, int) or userid <= 0:
-            raise HTTPException(status_code=401, detail="Invalid authentication.")
-        return userid
-    except (json.JSONDecodeError, ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Invalid authentication.")
+
+    return verify_session_token(auth_cookie)
 
 # utility helpers
 def get_eastern_now():
@@ -178,6 +226,17 @@ def get_user_by_email(email: str):
     cursor.execute(
         "SELECT id, name, email, password_hash, created_at FROM users WHERE email = ?",
         (email,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_user_by_id(userid: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, name, email, created_at FROM users WHERE id = ?",
+        (userid,),
     )
     row = cursor.fetchone()
     conn.close()
@@ -302,7 +361,7 @@ def health():
     return {"status": "ok"}
 
 @app.post("/auth/signup", status_code=201)
-def signup(entry: SignupEntry):
+def signup(entry: SignupEntry, response: Response):
     name = entry.name.strip()
     email = normalize_email(entry.email)
     password = entry.password
@@ -322,6 +381,8 @@ def signup(entry: SignupEntry):
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=409, detail="Email is already registered.")
 
+    set_auth_cookie(response, user_id)
+
     return {
         "message": "Account created.",
         "userid": user_id,
@@ -330,12 +391,14 @@ def signup(entry: SignupEntry):
     }
 
 @app.post("/auth/login")
-def login(entry: LoginEntry):
+def login(entry: LoginEntry, response: Response):
     email = normalize_email(entry.email)
     user = get_user_by_email(email)
 
     if not user or not verify_password(entry.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+    set_auth_cookie(response, user["id"])
 
     return {
         "message": "Login successful.",
@@ -343,6 +406,23 @@ def login(entry: LoginEntry):
         "name": user["name"],
         "email": user["email"],
     }
+
+@app.get("/auth/session")
+def get_session_user(userid: int = Depends(get_authenticated_userid)):
+    user = get_user_by_id(userid)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid authentication.")
+
+    return {
+        "userid": user["id"],
+        "name": user["name"],
+        "email": user["email"],
+    }
+
+@app.post("/auth/logout")
+def logout(response: Response):
+    clear_auth_cookie(response)
+    return {"message": "Logged out."}
 
 @app.post("/water")
 def log_water(entry: LogWaterRequest, userid: int = Depends(get_authenticated_userid)):
