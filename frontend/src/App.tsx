@@ -5,6 +5,18 @@ import LoginPage from './screens/LoginPage'
 import SignupPage from './screens/SignupPage'
 import AskMoodPage from './screens/AskMoodPage'
 import { ActivityPage, DashboardPage } from './screens/DashboardPage'
+import ProfilePage from './screens/ProfilePage'
+import AvatarEditorModal from './components/AvatarEditorModal'
+import {
+  AVATAR_ASSETS,
+  AvatarLayerKey,
+  AvatarSelection,
+  getDefaultAvatarSelection,
+  isAvatarSetupDone,
+  loadAvatarSelectionForUser,
+  markAvatarSetupDone,
+  saveAvatarSelectionForUser,
+} from './avatar'
 
 type AuthFieldErrors = {
   name?: string
@@ -55,7 +67,7 @@ type WeekActivityDay = {
   isToday: boolean
 }
 
-type Page = 'landing' | 'signup' | 'login' | 'ask-mood' | 'dashboard' | 'activity'
+type Page = 'landing' | 'signup' | 'login' | 'ask-mood' | 'dashboard' | 'activity' | 'profile'
 
 type AuthUser = {
   userid: number
@@ -214,7 +226,8 @@ function hashToPage(hash: string): Page | null {
     normalized === 'login' ||
     normalized === 'ask-mood' ||
     normalized === 'dashboard' ||
-    normalized === 'activity'
+    normalized === 'activity' ||
+    normalized === 'profile'
   ) {
     return normalized
   }
@@ -223,7 +236,7 @@ function hashToPage(hash: string): Page | null {
 }
 
 function guardPage(page: Page, isAuthenticated: boolean): Page {
-  if (!isAuthenticated && (page === 'ask-mood' || page === 'dashboard' || page === 'activity')) {
+  if (!isAuthenticated && (page === 'ask-mood' || page === 'dashboard' || page === 'activity' || page === 'profile')) {
     return 'landing'
   }
 
@@ -318,6 +331,31 @@ function getTimeOfDayGreeting() {
   return 'Good Night'
 }
 
+function getLongestActiveStreak(days: WeekActivityDay[]) {
+  let longest = 0
+  let current = 0
+
+  for (const day of days) {
+    if (day.hasActivity) {
+      current += 1
+      longest = Math.max(longest, current)
+    } else {
+      current = 0
+    }
+  }
+
+  return longest
+}
+
+function getUserHandle(email: string) {
+  const localPart = email.split('@')[0]?.trim()
+  if (!localPart) {
+    return '@bloom_user'
+  }
+
+  return `@${localPart}`
+}
+
 function App() {
   const [page, setPage] = useState<Page>(() => getInitialPage(Boolean(loadAuthUserFromStorage())))
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUserFromStorage())
@@ -361,6 +399,8 @@ function App() {
   const [plantDisplayMode, setPlantDisplayMode] = useState<'ground' | 'pot'>('ground')
   const [navMenuOpen, setNavMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [avatarSelection, setAvatarSelection] = useState<AvatarSelection>(() => getDefaultAvatarSelection())
+  const [avatarModalMode, setAvatarModalMode] = useState<'onboarding' | 'editor' | null>(null)
 
   const signupUrl = useMemo(() => getApiUrl(SIGNUP_ENDPOINT), [])
   const loginUrl = useMemo(() => getApiUrl(LOGIN_ENDPOINT), [])
@@ -392,6 +432,34 @@ function App() {
     }
     clearAuthUserFromStorage()
   }, [authUser])
+
+  useEffect(() => {
+    if (!authUser?.userid) {
+      setAvatarSelection(getDefaultAvatarSelection())
+      setAvatarModalMode(null)
+      return
+    }
+
+    setAvatarSelection(loadAvatarSelectionForUser(authUser.userid))
+  }, [authUser?.userid])
+
+  useEffect(() => {
+    if (!authUser?.userid) {
+      return
+    }
+
+    if (page !== 'dashboard') {
+      return
+    }
+
+    const today = getTodayDayString()
+    const moodPromptCompleted = hasCompletedMoodPromptToday(authUser.userid, today)
+    const avatarSetupDone = isAvatarSetupDone(authUser.userid)
+
+    if (moodPromptCompleted && !avatarSetupDone) {
+      setAvatarModalMode((current) => current ?? 'onboarding')
+    }
+  }, [page, authUser?.userid])
 
   useEffect(() => {
     let isMounted = true
@@ -441,7 +509,7 @@ function App() {
       const basePage = guardPage(fromHash ?? fallbackPage, Boolean(authUser))
 
       let guardedPage = basePage
-      if (authUser?.userid && (basePage === 'dashboard' || basePage === 'activity')) {
+      if (authUser?.userid && (basePage === 'dashboard' || basePage === 'activity' || basePage === 'profile')) {
         const today = getTodayDayString()
         if (!hasCompletedMoodPromptToday(authUser.userid, today)) {
           guardedPage = 'ask-mood'
@@ -747,6 +815,35 @@ function App() {
     }
   }
 
+  function handleAvatarLayerChange(layer: AvatarLayerKey, value: string) {
+    setAvatarSelection((current) => ({
+      ...current,
+      [layer]: value,
+    }))
+  }
+
+  function handleOpenAvatarEditor() {
+    setAvatarModalMode('editor')
+  }
+
+  function handleCloseAvatarModal() {
+    if (avatarModalMode === 'onboarding' && authUser?.userid) {
+      markAvatarSetupDone(authUser.userid)
+    }
+
+    setAvatarModalMode(null)
+  }
+
+  function handleSaveAvatar() {
+    if (!authUser?.userid) {
+      setAvatarModalMode(null)
+      return
+    }
+
+    saveAvatarSelectionForUser(authUser.userid, avatarSelection)
+    setAvatarModalMode(null)
+  }
+
   function navigateTo(nextPage: Page, options?: { replace?: boolean; ignoreAuthGuard?: boolean }) {
     const guardedPage = options?.ignoreAuthGuard ? nextPage : guardPage(nextPage, Boolean(authUser))
     const targetHash = pageToHash(guardedPage)
@@ -991,6 +1088,9 @@ function App() {
 
         {profileMenuOpen && (
           <div className="nav-dropdown profile-dropdown" role="menu" aria-label="Profile menu">
+            <button className="nav-dropdown-item" onClick={() => navigateTo('profile', { ignoreAuthGuard: true })}>
+              Profile
+            </button>
             <button className="nav-dropdown-item danger" onClick={handleLogout}>
               Logout
             </button>
@@ -1012,7 +1112,7 @@ function App() {
     )
   }
 
-  function renderDashboardNav(activePage: 'dashboard' | 'activity') {
+  function renderDashboardNav(activePage: 'dashboard' | 'activity' | 'profile') {
     return (
       <header className="dashboard-nav">
         <div className="dashboard-nav-left">
@@ -1114,6 +1214,24 @@ function App() {
     )
   }
 
+  function renderAvatarModal() {
+    if (!avatarModalMode) {
+      return null
+    }
+
+    return (
+      <AvatarEditorModal
+        open={Boolean(avatarModalMode)}
+        mode={avatarModalMode}
+        avatar={avatarSelection}
+        assets={AVATAR_ASSETS}
+        onChange={handleAvatarLayerChange}
+        onSave={handleSaveAvatar}
+        onClose={handleCloseAvatarModal}
+      />
+    )
+  }
+
   function renderDashboard() {
     const hydrationRatio = clampProgress(waterSummary?.percentage ?? 0)
     const moodRatio = clampProgress((dailySummary?.moods_logged ?? moodLogs.length) / 3)
@@ -1121,20 +1239,23 @@ function App() {
     const greeting = getTimeOfDayGreeting()
 
     return (
-      <DashboardPage
-        pageStyle={pageStyle}
-        navNode={renderDashboardNav('dashboard')}
-        greetingText={greeting}
-        greetingName={authUser?.name ?? 'Bloom User'}
-        plantNode={renderPlantStagePanel()}
-        weekActivity={weekActivity}
-        summaryDate={dailySummary?.date ?? waterSummary?.date ?? ''}
-        waterSummary={waterSummary}
-        dailySummary={dailySummary}
-        waterError={waterError}
-        hydrationRatio={hydrationRatio}
-        moodRatio={moodRatio}
-      />
+      <>
+        <DashboardPage
+          pageStyle={pageStyle}
+          navNode={renderDashboardNav('dashboard')}
+          greetingText={greeting}
+          greetingName={authUser?.name ?? 'Bloom User'}
+          plantNode={renderPlantStagePanel()}
+          weekActivity={weekActivity}
+          summaryDate={dailySummary?.date ?? waterSummary?.date ?? ''}
+          waterSummary={waterSummary}
+          dailySummary={dailySummary}
+          waterError={waterError}
+          hydrationRatio={hydrationRatio}
+          moodRatio={moodRatio}
+        />
+        {renderAvatarModal()}
+      </>
     )
   }
 
@@ -1144,31 +1265,59 @@ function App() {
     const greeting = getTimeOfDayGreeting()
 
     return (
-      <ActivityPage
-        pageStyle={pageStyle}
-        navNode={renderDashboardNav('activity')}
-        greetingText={greeting}
-        greetingName={authUser?.name ?? 'Bloom User'}
-        plantNode={renderPlantStagePanel()}
-        weekActivity={weekActivity}
-        waterSummary={waterSummary}
-        dailySummary={dailySummary}
-        moodLogs={moodLogs}
-        waterError={waterError}
-        moodError={moodError}
-        activityMessage={activityMessage}
-        activityError={activityError}
-        isLoggingWater={isLoggingWater}
-        isLoggingMood={isLoggingMood}
-        waterAmountInput={waterAmountInput}
-        moodInput={moodInput}
-        isLoadingDailyData={isLoadingDailyData}
-        hydrationPercentage={hydrationPercentage}
-        onWaterAmountChange={setWaterAmountInput}
-        onMoodChange={setMoodInput}
-        onSubmitWater={handleLogWater}
-        onSubmitMood={handleLogMood}
-      />
+      <>
+        <ActivityPage
+          pageStyle={pageStyle}
+          navNode={renderDashboardNav('activity')}
+          greetingText={greeting}
+          greetingName={authUser?.name ?? 'Bloom User'}
+          plantNode={renderPlantStagePanel()}
+          weekActivity={weekActivity}
+          waterSummary={waterSummary}
+          dailySummary={dailySummary}
+          moodLogs={moodLogs}
+          waterError={waterError}
+          moodError={moodError}
+          activityMessage={activityMessage}
+          activityError={activityError}
+          isLoggingWater={isLoggingWater}
+          isLoggingMood={isLoggingMood}
+          waterAmountInput={waterAmountInput}
+          moodInput={moodInput}
+          isLoadingDailyData={isLoadingDailyData}
+          hydrationPercentage={hydrationPercentage}
+          onWaterAmountChange={setWaterAmountInput}
+          onMoodChange={setMoodInput}
+          onSubmitWater={handleLogWater}
+          onSubmitMood={handleLogMood}
+        />
+        {renderAvatarModal()}
+      </>
+    )
+  }
+
+  function renderProfile() {
+    const displayName = authUser?.name?.trim() || 'Bloom User'
+    const username = getUserHandle(authUser?.email ?? '')
+    const friendsCount = 0
+    const longestStreak = getLongestActiveStreak(weekActivity)
+    const bioText =
+      'This is your profile space. In the next milestone, we can add custom bios and social features.'
+
+    return (
+      <>
+        <ProfilePage
+          navNode={renderDashboardNav('profile')}
+          displayName={displayName}
+          username={username}
+          friendsCount={friendsCount}
+          longestStreak={longestStreak}
+          bioText={bioText}
+          avatar={avatarSelection}
+          onEditAvatar={handleOpenAvatarEditor}
+        />
+        {renderAvatarModal()}
+      </>
     )
   }
 
@@ -1228,6 +1377,10 @@ function App() {
 
   if (page === 'activity') {
     return renderActivity()
+  }
+
+  if (page === 'profile') {
+    return renderProfile()
   }
 
   if (page === 'ask-mood') {

@@ -1,41 +1,85 @@
+import type { ReactNode } from 'react'
+import type { AvatarSelection } from '../avatar'
+import AvatarPreview from '../components/AvatarPreview'
+
 type ProfilePageProps = {
-  name: string
-  onBack: () => void
-  onGoFriends: () => void
+  navNode: ReactNode
+  displayName: string
+  username: string
+  friendsCount: number
+  longestStreak: number
+  bioText: string
+  avatar: AvatarSelection
+  onEditAvatar: () => void
 }
 
-export default function ProfilePage({ name, onBack, onGoFriends }: ProfilePageProps) {
+export default function ProfilePage({
+  navNode,
+  displayName,
+  username,
+  friendsCount,
+  longestStreak,
+  bioText,
+  avatar,
+  onEditAvatar,
+}: ProfilePageProps) {
   return (
-    <main>
-      <div>
-        <div>
-          <button type="button" aria-label="Go back" onClick={onBack}>
-            ←
-          </button>
-          <div aria-label="profile image" role="img">
-            PFP
+    <div className="dashboard-page screen-fade-in profile-page-root">
+      {navNode}
+
+      <main className="profile-main">
+        <section className="profile-banner" aria-label="Profile banner">
+          <h1>{displayName}</h1>
+          <p>{username}</p>
+          <div className="profile-status-bubble" aria-hidden="true">
+            <span>+</span>
           </div>
-        </div>
-        <h1>{name}</h1>
-      </div>
+        </section>
 
-      <div>
-        <h2>Bio</h2>
-        <p>Your bio goes here.</p>
-      </div>
-
-      <div>
-        <div role="button" tabIndex={0} onClick={onGoFriends} onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && onGoFriends()}>
-          <button type="button" onClick={onGoFriends}>
-            Friends
+        <section className="profile-headshot-card">
+          <button type="button" className="profile-edit-btn" onClick={onEditAvatar} aria-label="Edit avatar">
+            ✎
           </button>
-        </div>
+          <AvatarPreview avatar={avatar} className="avatar-preview-profile-main" />
+          <span className="profile-status-dot" aria-hidden="true" />
+        </section>
 
-        <div>
-          <h2>Longest Streak</h2>
-          <p>0 days</p>
-        </div>
-      </div>
-    </main>
+        <section className="profile-stats-row" aria-label="Profile statistics">
+          <article className="profile-stat-box">
+            <h2>Friends</h2>
+            <p>{friendsCount}</p>
+          </article>
+
+          <article className="profile-stat-box wide">
+            <h2>Longest Streak</h2>
+            <p>{longestStreak}</p>
+          </article>
+        </section>
+
+        <section className="profile-avatar-panel" aria-label="Avatar panel">
+          <div className="profile-panel-header">
+            <h2>Your Avatar</h2>
+          </div>
+          <div className="profile-avatar-thumbnail">
+            <AvatarPreview avatar={avatar} className="avatar-preview-profile-thumb" />
+            <button type="button" className="profile-edit-btn floating" onClick={onEditAvatar} aria-label="Edit avatar">
+              ✎
+            </button>
+          </div>
+        </section>
+
+        <section className="profile-bio-panel" aria-label="Bio panel">
+          <div className="profile-panel-header">
+            <h2>Bio</h2>
+            <button type="button" className="profile-edit-btn" aria-label="Edit bio" disabled>
+              ✎
+            </button>
+          </div>
+          <div className="profile-bio-box">
+            <p>{bioText}</p>
+          </div>
+        </section>
+      </main>
+    </div>
   )
 }
