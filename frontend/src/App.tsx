@@ -64,6 +64,8 @@ type WeekActivityDay = {
   label: string
   date: string
   hasActivity: boolean
+  hasWater: boolean
+  hasMood: boolean
   isToday: boolean
 }
 
@@ -97,6 +99,7 @@ const SUMMARY_ENDPOINT = import.meta.env.VITE_SUMMARY_ENDPOINT ?? '/summary'
 const SESSION_ENDPOINT = import.meta.env.VITE_SESSION_ENDPOINT ?? '/auth/session'
 const LOGOUT_ENDPOINT = import.meta.env.VITE_LOGOUT_ENDPOINT ?? '/auth/logout'
 const AUTH_USER_STORAGE_KEY = 'bloom_auth_user'
+const PROFILE_PHOTO_STORAGE_PREFIX = 'bloom_profile_photo_v1:'
 const MOOD_PROMPT_DONE_PREFIX = 'bloom_mood_prompt_done'
 
 function getBackgroundStyle(variableName: string, imageUrl: string): CSSProperties | undefined {
@@ -356,6 +359,19 @@ function getUserHandle(email: string) {
   return `@${localPart}`
 }
 
+function loadProfilePhotoForUser(userid: number): string | null {
+  try {
+    const value = localStorage.getItem(`${PROFILE_PHOTO_STORAGE_PREFIX}${userid}`)
+    return value || null
+  } catch {
+    return null
+  }
+}
+
+function saveProfilePhotoForUser(userid: number, imageDataUrl: string) {
+  localStorage.setItem(`${PROFILE_PHOTO_STORAGE_PREFIX}${userid}`, imageDataUrl)
+}
+
 function App() {
   const [page, setPage] = useState<Page>(() => getInitialPage(Boolean(loadAuthUserFromStorage())))
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUserFromStorage())
@@ -401,6 +417,7 @@ function App() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [avatarSelection, setAvatarSelection] = useState<AvatarSelection>(() => getDefaultAvatarSelection())
   const [avatarModalMode, setAvatarModalMode] = useState<'onboarding' | 'editor' | null>(null)
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null)
 
   const signupUrl = useMemo(() => getApiUrl(SIGNUP_ENDPOINT), [])
   const loginUrl = useMemo(() => getApiUrl(LOGIN_ENDPOINT), [])
@@ -437,10 +454,12 @@ function App() {
     if (!authUser?.userid) {
       setAvatarSelection(getDefaultAvatarSelection())
       setAvatarModalMode(null)
+      setProfilePhotoUrl(null)
       return
     }
 
     setAvatarSelection(loadAvatarSelectionForUser(authUser.userid))
+    setProfilePhotoUrl(loadProfilePhotoForUser(authUser.userid))
   }, [authUser?.userid])
 
   useEffect(() => {
@@ -549,6 +568,8 @@ function App() {
         label: labels[index],
         date: dayString,
         hasActivity: false,
+        hasWater: false,
+        hasMood: false,
         isToday: dayString === toDayString(today),
       }
     })
@@ -562,17 +583,33 @@ function App() {
 
           const response = await fetch(request.toString(), { credentials: 'include' })
           if (!response.ok) {
-            return { date: day.date, hasActivity: false }
+            return { date: day.date, hasActivity: false, hasWater: false, hasMood: false }
           }
 
           const payload = (await response.json()) as DailySummaryResponse
-          const hasActivity = payload.amount_logged > 0 || payload.moods_logged > 0
-          return { date: day.date, hasActivity }
+          const hasWater = payload.amount_logged > 0
+          const hasMood = payload.moods_logged > 0
+          return {
+            date: day.date,
+            hasActivity: hasWater || hasMood,
+            hasWater,
+            hasMood,
+          }
         })
       )
 
-      const map = new Map(results.map((item) => [item.date, item.hasActivity]))
-      setWeekActivity(days.map((day) => ({ ...day, hasActivity: Boolean(map.get(day.date)) })))
+      const map = new Map(results.map((item) => [item.date, item]))
+      setWeekActivity(
+        days.map((day) => {
+          const activity = map.get(day.date)
+          return {
+            ...day,
+            hasActivity: Boolean(activity?.hasActivity),
+            hasWater: Boolean(activity?.hasWater),
+            hasMood: Boolean(activity?.hasMood),
+          }
+        })
+      )
     } catch {
       setWeekActivity(days)
     }
@@ -844,6 +881,28 @@ function App() {
     setAvatarModalMode(null)
   }
 
+  function handleUploadProfilePhoto(file: File) {
+    if (!authUser?.userid) {
+      return
+    }
+
+    if (!file.type.startsWith('image/')) {
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : null
+      if (!result) {
+        return
+      }
+
+      setProfilePhotoUrl(result)
+      saveProfilePhotoForUser(authUser.userid, result)
+    }
+    reader.readAsDataURL(file)
+  }
+
   function navigateTo(nextPage: Page, options?: { replace?: boolean; ignoreAuthGuard?: boolean }) {
     const guardedPage = options?.ignoreAuthGuard ? nextPage : guardPage(nextPage, Boolean(authUser))
     const targetHash = pageToHash(guardedPage)
@@ -1083,7 +1142,15 @@ function App() {
           aria-expanded={profileMenuOpen}
           onClick={() => setProfileMenuOpen((current) => !current)}
         >
-          <span className="profile-avatar" aria-hidden="true" />
+          {profilePhotoUrl ? (
+            <img src={profilePhotoUrl} alt="" aria-hidden="true" className="profile-btn-photo" />
+          ) : (
+            <span className="profile-kawaii-face" aria-hidden="true">
+              <span className="profile-kawaii-eye left" />
+              <span className="profile-kawaii-eye right" />
+              <span className="profile-kawaii-mouth" />
+            </span>
+          )}
         </button>
 
         {profileMenuOpen && (
@@ -1314,7 +1381,9 @@ function App() {
           longestStreak={longestStreak}
           bioText={bioText}
           avatar={avatarSelection}
+          profilePhotoUrl={profilePhotoUrl}
           onEditAvatar={handleOpenAvatarEditor}
+          onUploadProfilePhoto={handleUploadProfilePhoto}
         />
         {renderAvatarModal()}
       </>
