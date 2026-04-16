@@ -63,7 +63,7 @@ type AuthUser = {
   email: string
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`
 const LANDING_HERO_IMAGE_URL = import.meta.env.VITE_LANDING_HERO_IMAGE_URL ?? '/landing-hero.png'
 const LANDING_BACKGROUND_IMAGE_URL = import.meta.env.VITE_LANDING_BACKGROUND_IMAGE_URL ?? ''
 const DASHBOARD_BACKGROUND_IMAGE_URL = import.meta.env.VITE_DASHBOARD_BACKGROUND_IMAGE_URL ?? ''
@@ -450,7 +450,7 @@ function App() {
           request.searchParams.set('userid', String(userId))
           request.searchParams.set('date', day.date)
 
-          const response = await fetch(request.toString())
+          const response = await fetch(request.toString(), { credentials: 'include' })
           if (!response.ok) {
             return { date: day.date, hasActivity: false }
           }
@@ -489,7 +489,7 @@ function App() {
       setWaterError('')
       setMoodError('')
 
-      const response = await fetch(requestSummaryUrl.toString())
+      const response = await fetch(requestSummaryUrl.toString(), { credentials: 'include' })
       if (!response.ok) {
         throw new Error(`Unable to load summary data (${response.status}).`)
       }
@@ -498,7 +498,7 @@ function App() {
       applySummaryState(summaryData)
       await fetchWeekActivityData(authUser.userid)
 
-      const moodsResponse = await fetch(requestMoodsUrl.toString())
+      const moodsResponse = await fetch(requestMoodsUrl.toString(), { credentials: 'include' })
       if (moodsResponse.ok) {
         const moodsPayload = (await moodsResponse.json()) as { moods?: MoodLog[] }
         if (Array.isArray(moodsPayload.moods)) {
@@ -558,6 +558,7 @@ function App() {
       const response = await fetch(logWaterUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           amount: parsedAmount,
           userid: authUser.userid,
@@ -614,6 +615,7 @@ function App() {
       const response = await fetch(logMoodUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           mood: moodValue,
           userid: authUser.userid,
@@ -671,6 +673,7 @@ function App() {
       const response = await fetch(logMoodUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           mood: selectedMood,
           userid: authUser.userid,
