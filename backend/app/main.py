@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sqlite3
@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 import hashlib
 import hmac
 import os
+import json
+import urllib.parse
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -14,7 +16,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,11 +34,9 @@ except ZoneInfoNotFoundError:
 # request / response models
 class LogWaterRequest(BaseModel):
     amount: int
-    userid: int
 
 class LogMoodRequest(BaseModel):
     mood: str
-    userid: int
 
 class SignupEntry(BaseModel):
     name: str
@@ -81,7 +81,6 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             userid INTEGER NOT NULL,
             mood TEXT NOT NULL,
-            text TEXT,
             created_at TEXT NOT NULL
         )
     """)
@@ -90,6 +89,24 @@ def init_db():
     conn.close()
 
 init_db()
+
+# authentication helpers
+AUTH_COOKIE_NAME = 'bloom_auth_user'
+
+def get_authenticated_userid(request: Request) -> int:
+    """Extract authenticated user ID from auth cookie."""
+    auth_cookie = request.cookies.get(AUTH_COOKIE_NAME)
+    if not auth_cookie:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    
+    try:
+        user_data = json.loads(urllib.parse.unquote(auth_cookie))
+        userid = user_data.get("userid")
+        if not isinstance(userid, int) or userid <= 0:
+            raise HTTPException(status_code=401, detail="Invalid authentication.")
+        return userid
+    except (json.JSONDecodeError, ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="Invalid authentication.")
 
 # utility helpers
 def get_eastern_now():
@@ -323,22 +340,22 @@ def login(entry: LoginEntry):
     }
 
 @app.post("/water")
-def log_water(entry: LogWaterRequest):
-    create_water_log(entry.amount, entry.userid)
-    return LogWaterResponse(entry.amount, entry.userid)
+def log_water(entry: LogWaterRequest, userid: int = Depends(get_authenticated_userid)):
+    create_water_log(entry.amount, userid)
+    return LogWaterResponse(entry.amount, userid)
 
 @app.get("/water")
-def get_water(userid: int, date_str: str | None = Query(default=None, alias="date")):
+def get_water(date_str: str | None = Query(default=None, alias="date"), userid: int = Depends(get_authenticated_userid)):
     day_string = get_day_string(date_str)
     return get_water_summary_for_day(day_string, userid)
 
 @app.post("/mood")
-def log_mood(entry: LogMoodRequest):
-    create_mood_log(entry.mood, entry.userid)
-    return LogMoodResponse(entry.mood, entry.userid)
+def log_mood(entry: LogMoodRequest, userid: int = Depends(get_authenticated_userid)):
+    create_mood_log(entry.mood, userid)
+    return LogMoodResponse(entry.mood, userid)
 
 @app.get("/moods")
-def get_moods(userid: int, date_str: str | None = Query(default=None, alias="date")):
+def get_moods(date_str: str | None = Query(default=None, alias="date"), userid: int = Depends(get_authenticated_userid)):
     day_string = get_day_string(date_str)
     return {
         "userid": userid,
@@ -347,6 +364,6 @@ def get_moods(userid: int, date_str: str | None = Query(default=None, alias="dat
     }
 
 @app.get("/summary")
-def summary(userid: int, date_str: str | None = Query(default=None, alias="date")):
+def summary(date_str: str | None = Query(default=None, alias="date"), userid: int = Depends(get_authenticated_userid)):
     day_string = get_day_string(date_str)
     return get_daily_summary(day_string, userid)
