@@ -48,7 +48,6 @@ type DashboardPageProps = {
   waterError: string
   hydrationRatio: number
   moodRatio: number
-  onGoActivity: () => void
 }
 
 function ProgressBar({ label, percentage, variant }: { label: string; percentage: number; variant: 'blue' | 'green' | 'gold' }) {
@@ -90,7 +89,6 @@ export function DashboardPage({
   waterError,
   hydrationRatio,
   moodRatio,
-  onGoActivity,
 }: DashboardPageProps) {
   return (
     <div className="dashboard-page screen-fade-in" style={pageStyle}>
@@ -157,9 +155,6 @@ export function DashboardPage({
           </section>
 
           <section className="dashboard-actions">
-            <button className="join-btn" onClick={onGoActivity}>
-              Go To Activity Logging
-            </button>
             <div className="dashboard-meta">
               {waterError ? (
                 <p className="error-text">{waterError}</p>

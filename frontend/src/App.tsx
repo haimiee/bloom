@@ -962,6 +962,9 @@ function App() {
               </span>
               Home
             </button>
+            <button className="nav-dropdown-item" onClick={() => navigateTo('activity', { ignoreAuthGuard: true })}>
+              Activity
+            </button>
           </div>
         )}
       </div>
@@ -1015,12 +1018,6 @@ function App() {
         <div className="dashboard-nav-left">
           {renderHamburgerMenu()}
           {renderBloomLogo('nav')}
-          <button
-            className={`dashboard-link ${activePage === 'activity' ? 'is-active' : ''}`}
-            onClick={() => navigateTo('activity', { ignoreAuthGuard: true })}
-          >
-            Activity Logging
-          </button>
         </div>
 
         <div className="dashboard-nav-right">{renderProfileMenu()}</div>
@@ -1137,7 +1134,6 @@ function App() {
         waterError={waterError}
         hydrationRatio={hydrationRatio}
         moodRatio={moodRatio}
-        onGoActivity={() => navigateTo('activity', { ignoreAuthGuard: true })}
       />
     )
   }
