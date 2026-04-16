@@ -31,7 +31,10 @@ type DailySummary = {
 type WeekActivityDay = {
   key: string
   label: string
+  date: string
   hasActivity: boolean
+  hasWater: boolean
+  hasMood: boolean
   isToday: boolean
 }
 
@@ -48,7 +51,6 @@ type DashboardPageProps = {
   waterError: string
   hydrationRatio: number
   moodRatio: number
-  onGoActivity: () => void
 }
 
 function ProgressBar({ label, percentage, variant }: { label: string; percentage: number; variant: 'blue' | 'green' | 'gold' }) {
@@ -77,6 +79,50 @@ function formatSummaryHeader(dateValue: string) {
   })
 }
 
+function toDayString(dateValue: Date) {
+  const year = dateValue.getFullYear()
+  const month = String(dateValue.getMonth() + 1).padStart(2, '0')
+  const day = String(dateValue.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function getCalendarCells(dateValue: string, weekActivity: WeekActivityDay[]) {
+  const basis = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date()
+  const year = basis.getFullYear()
+  const month = basis.getMonth()
+  const firstDayOfMonth = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const today = toDayString(new Date())
+  const activityMap = new Map(weekActivity.map((day) => [day.date, day]))
+
+  return Array.from({ length: firstDayOfMonth + daysInMonth }).map((_, index) => {
+    if (index < firstDayOfMonth) {
+      return {
+        key: `blank-${index}`,
+        label: '',
+        hasWater: false,
+        hasMood: false,
+        isToday: false,
+        isBlank: true,
+      }
+    }
+
+    const dayNumber = index - firstDayOfMonth + 1
+    const dayDate = new Date(year, month, dayNumber)
+    const dayKey = toDayString(dayDate)
+    const activity = activityMap.get(dayKey)
+
+    return {
+      key: dayKey,
+      label: String(dayNumber),
+      hasWater: Boolean(activity?.hasWater),
+      hasMood: Boolean(activity?.hasMood),
+      isToday: dayKey === today,
+      isBlank: false,
+    }
+  })
+}
+
 export function DashboardPage({
   pageStyle,
   navNode,
@@ -90,7 +136,6 @@ export function DashboardPage({
   waterError,
   hydrationRatio,
   moodRatio,
-  onGoActivity,
 }: DashboardPageProps) {
   return (
     <div className="dashboard-page screen-fade-in" style={pageStyle}>
@@ -121,9 +166,19 @@ export function DashboardPage({
             <article className="calendar-card">
               <h2>{formatSummaryHeader(summaryDate)}</h2>
               <p>Daily summary synced from backend.</p>
-              <div className="calendar-placeholder" aria-hidden="true">
-                {Array.from({ length: 35 }).map((_, index) => (
-                  <span key={index}>{index + 1 <= 31 ? index + 1 : ''}</span>
+              <div className="calendar-placeholder" aria-label="Monthly activity calendar">
+                {getCalendarCells(summaryDate, weekActivity).map((cell) => (
+                  <div key={cell.key} className={`calendar-day ${cell.isBlank ? 'is-blank' : ''} ${cell.isToday ? 'is-today' : ''}`}>
+                    {!cell.isBlank && (
+                      <>
+                        <span className="calendar-day-number">{cell.label}</span>
+                        <span className="calendar-day-dots" aria-hidden="true">
+                          {cell.hasWater && <span className="calendar-dot water-dot" />}
+                          {cell.hasMood && <span className="calendar-dot mood-dot" />}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 ))}
               </div>
             </article>
@@ -157,9 +212,6 @@ export function DashboardPage({
           </section>
 
           <section className="dashboard-actions">
-            <button className="join-btn" onClick={onGoActivity}>
-              Go To Activity Logging
-            </button>
             <div className="dashboard-meta">
               {waterError ? (
                 <p className="error-text">{waterError}</p>

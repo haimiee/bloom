@@ -5,6 +5,18 @@ import LoginPage from './screens/LoginPage'
 import SignupPage from './screens/SignupPage'
 import AskMoodPage from './screens/AskMoodPage'
 import { ActivityPage, DashboardPage } from './screens/DashboardPage'
+import ProfilePage from './screens/ProfilePage'
+import AvatarEditorModal from './components/AvatarEditorModal'
+import {
+  AVATAR_ASSETS,
+  AvatarLayerKey,
+  AvatarSelection,
+  getDefaultAvatarSelection,
+  isAvatarSetupDone,
+  loadAvatarSelectionForUser,
+  markAvatarSetupDone,
+  saveAvatarSelectionForUser,
+} from './avatar'
 
 type AuthFieldErrors = {
   name?: string
@@ -52,10 +64,12 @@ type WeekActivityDay = {
   label: string
   date: string
   hasActivity: boolean
+  hasWater: boolean
+  hasMood: boolean
   isToday: boolean
 }
 
-type Page = 'landing' | 'signup' | 'login' | 'ask-mood' | 'dashboard' | 'activity'
+type Page = 'landing' | 'signup' | 'login' | 'ask-mood' | 'dashboard' | 'activity' | 'profile'
 
 type AuthUser = {
   userid: number
@@ -63,7 +77,7 @@ type AuthUser = {
   email: string
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`
 const LANDING_HERO_IMAGE_URL = import.meta.env.VITE_LANDING_HERO_IMAGE_URL ?? '/landing-hero.png'
 const LANDING_BACKGROUND_IMAGE_URL = import.meta.env.VITE_LANDING_BACKGROUND_IMAGE_URL ?? ''
 const DASHBOARD_BACKGROUND_IMAGE_URL = import.meta.env.VITE_DASHBOARD_BACKGROUND_IMAGE_URL ?? ''
@@ -82,8 +96,10 @@ const LOG_WATER_ENDPOINT = import.meta.env.VITE_LOG_WATER_ENDPOINT ?? '/water'
 const LOG_MOOD_ENDPOINT = import.meta.env.VITE_LOG_MOOD_ENDPOINT ?? '/mood'
 const MOODS_ENDPOINT = import.meta.env.VITE_MOODS_ENDPOINT ?? '/moods'
 const SUMMARY_ENDPOINT = import.meta.env.VITE_SUMMARY_ENDPOINT ?? '/summary'
-const AUTH_COOKIE_NAME = 'bloom_auth_user'
-const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24
+const SESSION_ENDPOINT = import.meta.env.VITE_SESSION_ENDPOINT ?? '/auth/session'
+const LOGOUT_ENDPOINT = import.meta.env.VITE_LOGOUT_ENDPOINT ?? '/auth/logout'
+const AUTH_USER_STORAGE_KEY = 'bloom_auth_user'
+const PROFILE_PHOTO_STORAGE_PREFIX = 'bloom_profile_photo_v1:'
 const MOOD_PROMPT_DONE_PREFIX = 'bloom_mood_prompt_done'
 
 function getBackgroundStyle(variableName: string, imageUrl: string): CSSProperties | undefined {
@@ -161,32 +177,30 @@ async function parseResponse(response: Response) {
   }
 }
 
-function getCookieValue(name: string) {
-  const pattern = `; ${document.cookie}`
-  const segments = pattern.split(`; ${name}=`)
-  if (segments.length === 2) {
-    return segments.pop()?.split(';').shift() ?? null
-  }
-  return null
-}
-
-function saveAuthUserCookie(user: AuthUser) {
-  const serialized = encodeURIComponent(JSON.stringify(user))
-  document.cookie = `${AUTH_COOKIE_NAME}=${serialized}; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax`
-}
-
-function clearAuthUserCookie() {
-  document.cookie = `${AUTH_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`
-}
-
-function loadAuthUserFromCookie(): AuthUser | null {
-  const rawCookie = getCookieValue(AUTH_COOKIE_NAME)
-  if (!rawCookie) {
-    return null
-  }
-
+function saveAuthUserToStorage(user: AuthUser) {
   try {
-    const parsed = JSON.parse(decodeURIComponent(rawCookie)) as AuthUser
+    localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user))
+  } catch {
+    // Ignore storage errors in restricted browser modes.
+  }
+}
+
+function clearAuthUserFromStorage() {
+  try {
+    localStorage.removeItem(AUTH_USER_STORAGE_KEY)
+  } catch {
+    // Ignore storage errors in restricted browser modes.
+  }
+}
+
+function loadAuthUserFromStorage(): AuthUser | null {
+  try {
+    const rawValue = localStorage.getItem(AUTH_USER_STORAGE_KEY)
+    if (!rawValue) {
+      return null
+    }
+
+    const parsed = JSON.parse(rawValue) as AuthUser
     if (
       typeof parsed.userid === 'number' &&
       parsed.userid > 0 &&
@@ -196,7 +210,7 @@ function loadAuthUserFromCookie(): AuthUser | null {
       return parsed
     }
   } catch {
-    clearAuthUserCookie()
+    clearAuthUserFromStorage()
   }
 
   return null
@@ -215,7 +229,8 @@ function hashToPage(hash: string): Page | null {
     normalized === 'login' ||
     normalized === 'ask-mood' ||
     normalized === 'dashboard' ||
-    normalized === 'activity'
+    normalized === 'activity' ||
+    normalized === 'profile'
   ) {
     return normalized
   }
@@ -224,7 +239,7 @@ function hashToPage(hash: string): Page | null {
 }
 
 function guardPage(page: Page, isAuthenticated: boolean): Page {
-  if (!isAuthenticated && (page === 'ask-mood' || page === 'dashboard' || page === 'activity')) {
+  if (!isAuthenticated && (page === 'ask-mood' || page === 'dashboard' || page === 'activity' || page === 'profile')) {
     return 'landing'
   }
 
@@ -263,7 +278,11 @@ function getPlantStageLabel(stage: number) {
 }
 
 function getTodayDayString() {
-  return new Date().toISOString().slice(0, 10)
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function buildMoodPromptDoneKey(userId: number, dayString: string) {
@@ -294,7 +313,10 @@ function getStartOfWeekSunday(referenceDate: Date) {
 }
 
 function toDayString(value: Date) {
-  return value.toISOString().slice(0, 10)
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function getTimeOfDayGreeting() {
@@ -312,9 +334,47 @@ function getTimeOfDayGreeting() {
   return 'Good Night'
 }
 
+function getLongestActiveStreak(days: WeekActivityDay[]) {
+  let longest = 0
+  let current = 0
+
+  for (const day of days) {
+    if (day.hasActivity) {
+      current += 1
+      longest = Math.max(longest, current)
+    } else {
+      current = 0
+    }
+  }
+
+  return longest
+}
+
+function getUserHandle(email: string) {
+  const localPart = email.split('@')[0]?.trim()
+  if (!localPart) {
+    return '@bloom_user'
+  }
+
+  return `@${localPart}`
+}
+
+function loadProfilePhotoForUser(userid: number): string | null {
+  try {
+    const value = localStorage.getItem(`${PROFILE_PHOTO_STORAGE_PREFIX}${userid}`)
+    return value || null
+  } catch {
+    return null
+  }
+}
+
+function saveProfilePhotoForUser(userid: number, imageDataUrl: string) {
+  localStorage.setItem(`${PROFILE_PHOTO_STORAGE_PREFIX}${userid}`, imageDataUrl)
+}
+
 function App() {
-  const [page, setPage] = useState<Page>(() => getInitialPage(Boolean(loadAuthUserFromCookie())))
-  const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUserFromCookie())
+  const [page, setPage] = useState<Page>(() => getInitialPage(Boolean(loadAuthUserFromStorage())))
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUserFromStorage())
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -355,6 +415,9 @@ function App() {
   const [plantDisplayMode, setPlantDisplayMode] = useState<'ground' | 'pot'>('ground')
   const [navMenuOpen, setNavMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [avatarSelection, setAvatarSelection] = useState<AvatarSelection>(() => getDefaultAvatarSelection())
+  const [avatarModalMode, setAvatarModalMode] = useState<'onboarding' | 'editor' | null>(null)
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null)
 
   const signupUrl = useMemo(() => getApiUrl(SIGNUP_ENDPOINT), [])
   const loginUrl = useMemo(() => getApiUrl(LOGIN_ENDPOINT), [])
@@ -362,6 +425,8 @@ function App() {
   const logMoodUrl = useMemo(() => getApiUrl(LOG_MOOD_ENDPOINT), [])
   const moodsUrl = useMemo(() => getApiUrl(MOODS_ENDPOINT), [])
   const summaryUrl = useMemo(() => getApiUrl(SUMMARY_ENDPOINT), [])
+  const sessionUrl = useMemo(() => getApiUrl(SESSION_ENDPOINT), [])
+  const logoutUrl = useMemo(() => getApiUrl(LOGOUT_ENDPOINT), [])
 
   function applySummaryState(summary: DailySummaryResponse) {
     setDailySummary(summary)
@@ -379,11 +444,82 @@ function App() {
 
   useEffect(() => {
     if (authUser) {
-      saveAuthUserCookie(authUser)
+      saveAuthUserToStorage(authUser)
       return
     }
-    clearAuthUserCookie()
+    clearAuthUserFromStorage()
   }, [authUser])
+
+  useEffect(() => {
+    if (!authUser?.userid) {
+      setAvatarSelection(getDefaultAvatarSelection())
+      setAvatarModalMode(null)
+      setProfilePhotoUrl(null)
+      return
+    }
+
+    setAvatarSelection(loadAvatarSelectionForUser(authUser.userid))
+    setProfilePhotoUrl(loadProfilePhotoForUser(authUser.userid))
+  }, [authUser?.userid])
+
+  useEffect(() => {
+    if (!authUser?.userid) {
+      return
+    }
+
+    if (page !== 'dashboard') {
+      return
+    }
+
+    const today = getTodayDayString()
+    const moodPromptCompleted = hasCompletedMoodPromptToday(authUser.userid, today)
+    const avatarSetupDone = isAvatarSetupDone(authUser.userid)
+
+    if (moodPromptCompleted && !avatarSetupDone) {
+      setAvatarModalMode((current) => current ?? 'onboarding')
+    }
+  }, [page, authUser?.userid])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function syncSessionUser() {
+      try {
+        const response = await fetch(sessionUrl, { credentials: 'include' })
+
+        if (!isMounted) {
+          return
+        }
+
+        if (!response.ok) {
+          setAuthUser(null)
+          return
+        }
+
+        const parsed = await parseResponse(response)
+        const userName = typeof parsed?.name === 'string' ? parsed.name : ''
+        const userEmail = typeof parsed?.email === 'string' ? parsed.email : ''
+        const userId = typeof parsed?.userid === 'number' ? parsed.userid : 0
+
+        if (userId > 0 && userName && userEmail) {
+          setAuthUser({ userid: userId, name: userName, email: userEmail })
+          return
+        }
+
+        setAuthUser(null)
+      } catch {
+        if (isMounted) {
+          setAuthUser(null)
+        }
+      }
+    }
+
+    void syncSessionUser()
+
+    return () => {
+      isMounted = false
+    }
+  }, [sessionUrl])
 
   useEffect(() => {
     const applyUrlState = () => {
@@ -392,7 +528,7 @@ function App() {
       const basePage = guardPage(fromHash ?? fallbackPage, Boolean(authUser))
 
       let guardedPage = basePage
-      if (authUser?.userid && (basePage === 'dashboard' || basePage === 'activity')) {
+      if (authUser?.userid && (basePage === 'dashboard' || basePage === 'activity' || basePage === 'profile')) {
         const today = getTodayDayString()
         if (!hasCompletedMoodPromptToday(authUser.userid, today)) {
           guardedPage = 'ask-mood'
@@ -432,6 +568,8 @@ function App() {
         label: labels[index],
         date: dayString,
         hasActivity: false,
+        hasWater: false,
+        hasMood: false,
         isToday: dayString === toDayString(today),
       }
     })
@@ -443,19 +581,35 @@ function App() {
           request.searchParams.set('userid', String(userId))
           request.searchParams.set('date', day.date)
 
-          const response = await fetch(request.toString())
+          const response = await fetch(request.toString(), { credentials: 'include' })
           if (!response.ok) {
-            return { date: day.date, hasActivity: false }
+            return { date: day.date, hasActivity: false, hasWater: false, hasMood: false }
           }
 
           const payload = (await response.json()) as DailySummaryResponse
-          const hasActivity = payload.amount_logged > 0 || payload.moods_logged > 0
-          return { date: day.date, hasActivity }
+          const hasWater = payload.amount_logged > 0
+          const hasMood = payload.moods_logged > 0
+          return {
+            date: day.date,
+            hasActivity: hasWater || hasMood,
+            hasWater,
+            hasMood,
+          }
         })
       )
 
-      const map = new Map(results.map((item) => [item.date, item.hasActivity]))
-      setWeekActivity(days.map((day) => ({ ...day, hasActivity: Boolean(map.get(day.date)) })))
+      const map = new Map(results.map((item) => [item.date, item]))
+      setWeekActivity(
+        days.map((day) => {
+          const activity = map.get(day.date)
+          return {
+            ...day,
+            hasActivity: Boolean(activity?.hasActivity),
+            hasWater: Boolean(activity?.hasWater),
+            hasMood: Boolean(activity?.hasMood),
+          }
+        })
+      )
     } catch {
       setWeekActivity(days)
     }
@@ -482,7 +636,7 @@ function App() {
       setWaterError('')
       setMoodError('')
 
-      const response = await fetch(requestSummaryUrl.toString())
+      const response = await fetch(requestSummaryUrl.toString(), { credentials: 'include' })
       if (!response.ok) {
         throw new Error(`Unable to load summary data (${response.status}).`)
       }
@@ -491,7 +645,7 @@ function App() {
       applySummaryState(summaryData)
       await fetchWeekActivityData(authUser.userid)
 
-      const moodsResponse = await fetch(requestMoodsUrl.toString())
+      const moodsResponse = await fetch(requestMoodsUrl.toString(), { credentials: 'include' })
       if (moodsResponse.ok) {
         const moodsPayload = (await moodsResponse.json()) as { moods?: MoodLog[] }
         if (Array.isArray(moodsPayload.moods)) {
@@ -551,6 +705,7 @@ function App() {
       const response = await fetch(logWaterUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           amount: parsedAmount,
           userid: authUser.userid,
@@ -607,6 +762,7 @@ function App() {
       const response = await fetch(logMoodUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           mood: moodValue,
           userid: authUser.userid,
@@ -664,6 +820,7 @@ function App() {
       const response = await fetch(logMoodUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           mood: selectedMood,
           userid: authUser.userid,
@@ -695,6 +852,57 @@ function App() {
     }
   }
 
+  function handleAvatarLayerChange(layer: AvatarLayerKey, value: string) {
+    setAvatarSelection((current) => ({
+      ...current,
+      [layer]: value,
+    }))
+  }
+
+  function handleOpenAvatarEditor() {
+    setAvatarModalMode('editor')
+  }
+
+  function handleCloseAvatarModal() {
+    if (avatarModalMode === 'onboarding' && authUser?.userid) {
+      markAvatarSetupDone(authUser.userid)
+    }
+
+    setAvatarModalMode(null)
+  }
+
+  function handleSaveAvatar() {
+    if (!authUser?.userid) {
+      setAvatarModalMode(null)
+      return
+    }
+
+    saveAvatarSelectionForUser(authUser.userid, avatarSelection)
+    setAvatarModalMode(null)
+  }
+
+  function handleUploadProfilePhoto(file: File) {
+    if (!authUser?.userid) {
+      return
+    }
+
+    if (!file.type.startsWith('image/')) {
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : null
+      if (!result) {
+        return
+      }
+
+      setProfilePhotoUrl(result)
+      saveProfilePhotoForUser(authUser.userid, result)
+    }
+    reader.readAsDataURL(file)
+  }
+
   function navigateTo(nextPage: Page, options?: { replace?: boolean; ignoreAuthGuard?: boolean }) {
     const guardedPage = options?.ignoreAuthGuard ? nextPage : guardPage(nextPage, Boolean(authUser))
     const targetHash = pageToHash(guardedPage)
@@ -717,6 +925,11 @@ function App() {
   }
 
   function handleLogout() {
+    void fetch(logoutUrl, {
+      method: 'POST',
+      credentials: 'include',
+    })
+
     setAuthUser(null)
     setWaterSummary(null)
     setDailySummary(null)
@@ -755,6 +968,7 @@ function App() {
       const response = await fetch(signupUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim().toLowerCase(),
@@ -822,6 +1036,7 @@ function App() {
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           email: loginEmail.trim().toLowerCase(),
           password: loginPassword,
@@ -903,6 +1118,9 @@ function App() {
               </span>
               Home
             </button>
+            <button className="nav-dropdown-item" onClick={() => navigateTo('activity', { ignoreAuthGuard: true })}>
+              Activity
+            </button>
           </div>
         )}
       </div>
@@ -924,11 +1142,22 @@ function App() {
           aria-expanded={profileMenuOpen}
           onClick={() => setProfileMenuOpen((current) => !current)}
         >
-          <span className="profile-avatar" aria-hidden="true" />
+          {profilePhotoUrl ? (
+            <img src={profilePhotoUrl} alt="" aria-hidden="true" className="profile-btn-photo" />
+          ) : (
+            <span className="profile-kawaii-face" aria-hidden="true">
+              <span className="profile-kawaii-eye left" />
+              <span className="profile-kawaii-eye right" />
+              <span className="profile-kawaii-mouth" />
+            </span>
+          )}
         </button>
 
         {profileMenuOpen && (
           <div className="nav-dropdown profile-dropdown" role="menu" aria-label="Profile menu">
+            <button className="nav-dropdown-item" onClick={() => navigateTo('profile', { ignoreAuthGuard: true })}>
+              Profile
+            </button>
             <button className="nav-dropdown-item danger" onClick={handleLogout}>
               Logout
             </button>
@@ -950,18 +1179,12 @@ function App() {
     )
   }
 
-  function renderDashboardNav(activePage: 'dashboard' | 'activity') {
+  function renderDashboardNav(activePage: 'dashboard' | 'activity' | 'profile') {
     return (
       <header className="dashboard-nav">
         <div className="dashboard-nav-left">
           {renderHamburgerMenu()}
           {renderBloomLogo('nav')}
-          <button
-            className={`dashboard-link ${activePage === 'activity' ? 'is-active' : ''}`}
-            onClick={() => navigateTo('activity', { ignoreAuthGuard: true })}
-          >
-            Activity Logging
-          </button>
         </div>
 
         <div className="dashboard-nav-right">{renderProfileMenu()}</div>
@@ -1058,6 +1281,24 @@ function App() {
     )
   }
 
+  function renderAvatarModal() {
+    if (!avatarModalMode) {
+      return null
+    }
+
+    return (
+      <AvatarEditorModal
+        open={Boolean(avatarModalMode)}
+        mode={avatarModalMode}
+        avatar={avatarSelection}
+        assets={AVATAR_ASSETS}
+        onChange={handleAvatarLayerChange}
+        onSave={handleSaveAvatar}
+        onClose={handleCloseAvatarModal}
+      />
+    )
+  }
+
   function renderDashboard() {
     const hydrationRatio = clampProgress(waterSummary?.percentage ?? 0)
     const moodRatio = clampProgress((dailySummary?.moods_logged ?? moodLogs.length) / 3)
@@ -1065,21 +1306,23 @@ function App() {
     const greeting = getTimeOfDayGreeting()
 
     return (
-      <DashboardPage
-        pageStyle={pageStyle}
-        navNode={renderDashboardNav('dashboard')}
-        greetingText={greeting}
-        greetingName={authUser?.name ?? 'Bloom User'}
-        plantNode={renderPlantStagePanel()}
-        weekActivity={weekActivity}
-        summaryDate={dailySummary?.date ?? waterSummary?.date ?? ''}
-        waterSummary={waterSummary}
-        dailySummary={dailySummary}
-        waterError={waterError}
-        hydrationRatio={hydrationRatio}
-        moodRatio={moodRatio}
-        onGoActivity={() => navigateTo('activity', { ignoreAuthGuard: true })}
-      />
+      <>
+        <DashboardPage
+          pageStyle={pageStyle}
+          navNode={renderDashboardNav('dashboard')}
+          greetingText={greeting}
+          greetingName={authUser?.name ?? 'Bloom User'}
+          plantNode={renderPlantStagePanel()}
+          weekActivity={weekActivity}
+          summaryDate={dailySummary?.date ?? waterSummary?.date ?? ''}
+          waterSummary={waterSummary}
+          dailySummary={dailySummary}
+          waterError={waterError}
+          hydrationRatio={hydrationRatio}
+          moodRatio={moodRatio}
+        />
+        {renderAvatarModal()}
+      </>
     )
   }
 
@@ -1089,31 +1332,61 @@ function App() {
     const greeting = getTimeOfDayGreeting()
 
     return (
-      <ActivityPage
-        pageStyle={pageStyle}
-        navNode={renderDashboardNav('activity')}
-        greetingText={greeting}
-        greetingName={authUser?.name ?? 'Bloom User'}
-        plantNode={renderPlantStagePanel()}
-        weekActivity={weekActivity}
-        waterSummary={waterSummary}
-        dailySummary={dailySummary}
-        moodLogs={moodLogs}
-        waterError={waterError}
-        moodError={moodError}
-        activityMessage={activityMessage}
-        activityError={activityError}
-        isLoggingWater={isLoggingWater}
-        isLoggingMood={isLoggingMood}
-        waterAmountInput={waterAmountInput}
-        moodInput={moodInput}
-        isLoadingDailyData={isLoadingDailyData}
-        hydrationPercentage={hydrationPercentage}
-        onWaterAmountChange={setWaterAmountInput}
-        onMoodChange={setMoodInput}
-        onSubmitWater={handleLogWater}
-        onSubmitMood={handleLogMood}
-      />
+      <>
+        <ActivityPage
+          pageStyle={pageStyle}
+          navNode={renderDashboardNav('activity')}
+          greetingText={greeting}
+          greetingName={authUser?.name ?? 'Bloom User'}
+          plantNode={renderPlantStagePanel()}
+          weekActivity={weekActivity}
+          waterSummary={waterSummary}
+          dailySummary={dailySummary}
+          moodLogs={moodLogs}
+          waterError={waterError}
+          moodError={moodError}
+          activityMessage={activityMessage}
+          activityError={activityError}
+          isLoggingWater={isLoggingWater}
+          isLoggingMood={isLoggingMood}
+          waterAmountInput={waterAmountInput}
+          moodInput={moodInput}
+          isLoadingDailyData={isLoadingDailyData}
+          hydrationPercentage={hydrationPercentage}
+          onWaterAmountChange={setWaterAmountInput}
+          onMoodChange={setMoodInput}
+          onSubmitWater={handleLogWater}
+          onSubmitMood={handleLogMood}
+        />
+        {renderAvatarModal()}
+      </>
+    )
+  }
+
+  function renderProfile() {
+    const displayName = authUser?.name?.trim() || 'Bloom User'
+    const username = getUserHandle(authUser?.email ?? '')
+    const friendsCount = 0
+    const longestStreak = getLongestActiveStreak(weekActivity)
+    const bioText =
+      'This is your profile space. In the next milestone, we can add custom bios and social features.'
+
+    return (
+      <>
+        <ProfilePage
+          navNode={renderDashboardNav('profile')}
+          displayName={displayName}
+          username={username}
+          friendsCount={friendsCount}
+          longestStreak={longestStreak}
+          bioText={bioText}
+          avatar={avatarSelection}
+          profilePhotoUrl={profilePhotoUrl}
+          onEditAvatar={handleOpenAvatarEditor}
+          onUploadProfilePhoto={handleUploadProfilePhoto}
+        />
+        {renderAvatarModal()}
+      </>
     )
   }
 
@@ -1173,6 +1446,10 @@ function App() {
 
   if (page === 'activity') {
     return renderActivity()
+  }
+
+  if (page === 'profile') {
+    return renderProfile()
   }
 
   if (page === 'ask-mood') {
