@@ -2,11 +2,12 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import hmac
 import os
-from zoneinfo import ZoneInfo
+from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 # app + config
 app = FastAPI()
@@ -20,9 +21,13 @@ app.add_middleware(
 )
 
 WATER_GOAL = 64
-DB_NAME = "database.db"
+DB_PATH = Path(__file__).resolve().parent.parent / "database.db"
 PASSWORD_HASH_ITERATIONS = 200_000
-EASTERN_TZ = ZoneInfo("America/New_York")
+try:
+    EASTERN_TZ = ZoneInfo("America/New_York")
+except ZoneInfoNotFoundError:
+    # Prefer local machine timezone to avoid UTC day rollover differences.
+    EASTERN_TZ = datetime.now().astimezone().tzinfo or timezone.utc
 
 # request / response models
 class LogWaterRequest(BaseModel):
@@ -44,7 +49,7 @@ class LoginEntry(BaseModel):
 
 # database connection helpers
 def get_connection():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
