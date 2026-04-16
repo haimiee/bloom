@@ -1520,6 +1520,19 @@
   gap: 8px;
 }
 
+.avatar-main-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.avatar-main-tabs .avatar-tab {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  min-height: 40px;
+  justify-content: center;
+}
+
 .avatar-hair-tabs {
   padding-left: 8px;
   border-left: 3px solid rgba(30, 82, 115, 0.65);
@@ -1527,12 +1540,19 @@
 }
 
 .avatar-tab {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 2px solid var(--ink);
   background: #e8e0d0;
   box-shadow: 3px 3px 0 rgba(30, 82, 115, 0.35);
   font-family: 'Space Mono', 'Consolas', monospace;
+  font-size: 0.92rem;
+  font-weight: 700;
   min-height: 36px;
   padding: 0 12px;
+  line-height: 1;
   text-transform: capitalize;
   cursor: pointer;
 }
