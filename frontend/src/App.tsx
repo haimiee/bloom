@@ -82,8 +82,9 @@ const LOG_WATER_ENDPOINT = import.meta.env.VITE_LOG_WATER_ENDPOINT ?? '/water'
 const LOG_MOOD_ENDPOINT = import.meta.env.VITE_LOG_MOOD_ENDPOINT ?? '/mood'
 const MOODS_ENDPOINT = import.meta.env.VITE_MOODS_ENDPOINT ?? '/moods'
 const SUMMARY_ENDPOINT = import.meta.env.VITE_SUMMARY_ENDPOINT ?? '/summary'
-const AUTH_COOKIE_NAME = 'bloom_auth_user'
-const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24
+const SESSION_ENDPOINT = import.meta.env.VITE_SESSION_ENDPOINT ?? '/auth/session'
+const LOGOUT_ENDPOINT = import.meta.env.VITE_LOGOUT_ENDPOINT ?? '/auth/logout'
+const AUTH_USER_STORAGE_KEY = 'bloom_auth_user'
 const MOOD_PROMPT_DONE_PREFIX = 'bloom_mood_prompt_done'
 
 function getBackgroundStyle(variableName: string, imageUrl: string): CSSProperties | undefined {
@@ -161,32 +162,30 @@ async function parseResponse(response: Response) {
   }
 }
 
-function getCookieValue(name: string) {
-  const pattern = `; ${document.cookie}`
-  const segments = pattern.split(`; ${name}=`)
-  if (segments.length === 2) {
-    return segments.pop()?.split(';').shift() ?? null
-  }
-  return null
-}
-
-function saveAuthUserCookie(user: AuthUser) {
-  const serialized = encodeURIComponent(JSON.stringify(user))
-  document.cookie = `${AUTH_COOKIE_NAME}=${serialized}; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax`
-}
-
-function clearAuthUserCookie() {
-  document.cookie = `${AUTH_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`
-}
-
-function loadAuthUserFromCookie(): AuthUser | null {
-  const rawCookie = getCookieValue(AUTH_COOKIE_NAME)
-  if (!rawCookie) {
-    return null
-  }
-
+function saveAuthUserToStorage(user: AuthUser) {
   try {
-    const parsed = JSON.parse(decodeURIComponent(rawCookie)) as AuthUser
+    localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user))
+  } catch {
+    // Ignore storage errors in restricted browser modes.
+  }
+}
+
+function clearAuthUserFromStorage() {
+  try {
+    localStorage.removeItem(AUTH_USER_STORAGE_KEY)
+  } catch {
+    // Ignore storage errors in restricted browser modes.
+  }
+}
+
+function loadAuthUserFromStorage(): AuthUser | null {
+  try {
+    const rawValue = localStorage.getItem(AUTH_USER_STORAGE_KEY)
+    if (!rawValue) {
+      return null
+    }
+
+    const parsed = JSON.parse(rawValue) as AuthUser
     if (
       typeof parsed.userid === 'number' &&
       parsed.userid > 0 &&
@@ -196,7 +195,7 @@ function loadAuthUserFromCookie(): AuthUser | null {
       return parsed
     }
   } catch {
-    clearAuthUserCookie()
+    clearAuthUserFromStorage()
   }
 
   return null
@@ -320,8 +319,8 @@ function getTimeOfDayGreeting() {
 }
 
 function App() {
-  const [page, setPage] = useState<Page>(() => getInitialPage(Boolean(loadAuthUserFromCookie())))
-  const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUserFromCookie())
+  const [page, setPage] = useState<Page>(() => getInitialPage(Boolean(loadAuthUserFromStorage())))
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUserFromStorage())
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -369,6 +368,8 @@ function App() {
   const logMoodUrl = useMemo(() => getApiUrl(LOG_MOOD_ENDPOINT), [])
   const moodsUrl = useMemo(() => getApiUrl(MOODS_ENDPOINT), [])
   const summaryUrl = useMemo(() => getApiUrl(SUMMARY_ENDPOINT), [])
+  const sessionUrl = useMemo(() => getApiUrl(SESSION_ENDPOINT), [])
+  const logoutUrl = useMemo(() => getApiUrl(LOGOUT_ENDPOINT), [])
 
   function applySummaryState(summary: DailySummaryResponse) {
     setDailySummary(summary)
@@ -386,11 +387,52 @@ function App() {
 
   useEffect(() => {
     if (authUser) {
-      saveAuthUserCookie(authUser)
+      saveAuthUserToStorage(authUser)
       return
     }
-    clearAuthUserCookie()
+    clearAuthUserFromStorage()
   }, [authUser])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function syncSessionUser() {
+      try {
+        const response = await fetch(sessionUrl, { credentials: 'include' })
+
+        if (!isMounted) {
+          return
+        }
+
+        if (!response.ok) {
+          setAuthUser(null)
+          return
+        }
+
+        const parsed = await parseResponse(response)
+        const userName = typeof parsed?.name === 'string' ? parsed.name : ''
+        const userEmail = typeof parsed?.email === 'string' ? parsed.email : ''
+        const userId = typeof parsed?.userid === 'number' ? parsed.userid : 0
+
+        if (userId > 0 && userName && userEmail) {
+          setAuthUser({ userid: userId, name: userName, email: userEmail })
+          return
+        }
+
+        setAuthUser(null)
+      } catch {
+        if (isMounted) {
+          setAuthUser(null)
+        }
+      }
+    }
+
+    void syncSessionUser()
+
+    return () => {
+      isMounted = false
+    }
+  }, [sessionUrl])
 
   useEffect(() => {
     const applyUrlState = () => {
@@ -727,6 +769,11 @@ function App() {
   }
 
   function handleLogout() {
+    void fetch(logoutUrl, {
+      method: 'POST',
+      credentials: 'include',
+    })
+
     setAuthUser(null)
     setWaterSummary(null)
     setDailySummary(null)
@@ -765,6 +812,7 @@ function App() {
       const response = await fetch(signupUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim().toLowerCase(),
@@ -832,6 +880,7 @@ function App() {
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           email: loginEmail.trim().toLowerCase(),
           password: loginPassword,
