@@ -2297,22 +2297,47 @@
 
   .avatar-modal-layout {
     grid-template-columns: 1fr;
+    gap: 10px;
+    overflow: visible;
   }
 
   .avatar-modal-backdrop {
     place-items: start center;
-    padding: 10px;
+    padding: 8px;
   }
 
   .avatar-modal {
     width: 100%;
-    max-height: calc(100dvh - 20px);
+    max-height: calc(100dvh - 16px);
     padding: 12px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .avatar-preview-large {
+    width: min(240px, 62vw);
+    justify-self: center;
+  }
+
+  .avatar-options-grid {
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+    max-height: min(30dvh, 220px);
+    padding: 8px;
+  }
+
+  .avatar-option {
+    min-height: 72px;
+    padding: 4px;
+  }
+
+  .avatar-option-none-symbol {
+    font-size: 2.1rem;
   }
 
   .avatar-modal-actions {
     position: sticky;
     bottom: 0;
+    z-index: 2;
     background: #fffff8;
     padding-top: 8px;
     padding-bottom: max(6px, env(safe-area-inset-bottom));
