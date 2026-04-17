@@ -1,10 +1,9 @@
-type MoodOption = {
-  label: string
-  emoji: string
-}
+import { useMemo } from 'react'
 
 type AskMoodPageProps = {
   greetingName: string
+  moodOptions: string[]
+  isReturningUser: boolean
   selectedMood: string
   customMoodEnabled: boolean
   customMoodText: string
@@ -16,17 +15,17 @@ type AskMoodPageProps = {
   onContinue: () => void
 }
 
-const MOOD_OPTIONS: MoodOption[] = [
-  { label: 'Happy', emoji: '😊' },
-  { label: 'Calm', emoji: '😌' },
-  { label: 'Focused', emoji: '🧠' },
-  { label: 'Excited', emoji: '🤩' },
-  { label: 'Tired', emoji: '😴' },
-  { label: 'Stressed', emoji: '😓' },
+const COPY_OPTIONS = [
+  "Check in, your bloom will follow.",
+  "Where you are is enough to grow from.",
+  "A small pause can help your bloom grow.",
+  "Take a moment, your bloom is still growing.",
 ]
 
 export default function AskMoodPage({
   greetingName,
+  moodOptions,
+  isReturningUser,
   selectedMood,
   customMoodEnabled,
   customMoodText,
@@ -37,6 +36,9 @@ export default function AskMoodPage({
   onCustomMoodTextChange,
   onContinue,
 }: AskMoodPageProps) {
+  const randomCopy = useMemo(() => {
+    return COPY_OPTIONS[Math.floor(Math.random() * COPY_OPTIONS.length)]
+  }, [])
   return (
     <div className="ask-mood-page screen-fade-in">
       <section className="ask-mood-card" aria-labelledby="ask-mood-title">
@@ -46,25 +48,22 @@ export default function AskMoodPage({
           <span className="leaf-frame frame-c">🍀</span>
         </div>
 
-        <p className="ask-mood-intro">Welcome back, {greetingName}</p>
+        <p className="ask-mood-intro">{isReturningUser ? `Welcome back, ${greetingName}` : `Welcome, ${greetingName}`}</p>
         <h1 id="ask-mood-title">How Are You Feeling Right Now?</h1>
-        <p className="ask-mood-copy">Pick one mood to start today&apos;s summary. You can always log more later.</p>
+        <p className="ask-mood-copy">{randomCopy}</p>
 
         <div className="mood-option-grid" role="list" aria-label="Mood options">
-          {MOOD_OPTIONS.map((option) => {
-            const isSelected = !customMoodEnabled && selectedMood === option.label
+          {moodOptions.map((option) => {
+            const isSelected = !customMoodEnabled && selectedMood === option
             return (
               <button
-                key={option.label}
+                key={option}
                 type="button"
                 className={`mood-option-btn ${isSelected ? 'is-selected' : ''}`}
-                onClick={() => onSelectMood(option.label)}
+                onClick={() => onSelectMood(option)}
                 aria-pressed={isSelected}
               >
-                <span className="mood-emoji" aria-hidden="true">
-                  {option.emoji}
-                </span>
-                <span>{option.label}</span>
+                <span>{option}</span>
               </button>
             )
           })}
@@ -72,28 +71,23 @@ export default function AskMoodPage({
           <button
             type="button"
             className={`mood-option-btn custom-toggle ${customMoodEnabled ? 'is-selected' : ''}`}
-            onClick={onToggleCustomMood}
-            aria-pressed={customMoodEnabled}
+            onClick={() => onToggleCustomMood()}
+            aria-label="Add custom mood"
           >
-            <span className="mood-emoji" aria-hidden="true">
-              ✏️
+            <span className="mood-pencil" aria-hidden="true">
+              ✎
             </span>
-            <span>Type My Mood</span>
-          </button>
-        </div>
-
-        {customMoodEnabled && (
-          <div className="custom-mood-wrap">
-            <label htmlFor="custom-mood-input">Custom Mood</label>
             <input
-              id="custom-mood-input"
               type="text"
+              autoFocus={customMoodEnabled}
+              className="mood-expanding-input"
               value={customMoodText}
               onChange={(event) => onCustomMoodTextChange(event.target.value)}
-              placeholder="Write your mood"
+              placeholder="Type mood"
+              aria-label="Type custom mood"
             />
-          </div>
-        )}
+          </button>
+        </div>
 
         {errorMessage && <p className="error-text ask-mood-error">{errorMessage}</p>}
 

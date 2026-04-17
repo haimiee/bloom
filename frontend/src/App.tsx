@@ -111,11 +111,13 @@ const LOG_MOOD_ENDPOINT = import.meta.env.VITE_LOG_MOOD_ENDPOINT ?? '/mood'
 const MOODS_ENDPOINT = import.meta.env.VITE_MOODS_ENDPOINT ?? '/moods'
 const SUMMARY_ENDPOINT = import.meta.env.VITE_SUMMARY_ENDPOINT ?? '/summary'
 const COMMUNITY_FEED_ENDPOINT = import.meta.env.VITE_COMMUNITY_FEED_ENDPOINT ?? '/community-feed'
+const MOOD_OPTIONS_ENDPOINT = import.meta.env.VITE_MOOD_OPTIONS_ENDPOINT ?? '/mood-options'
 const AVATAR_ENDPOINT = import.meta.env.VITE_AVATAR_ENDPOINT ?? '/avatar'
 const SESSION_ENDPOINT = import.meta.env.VITE_SESSION_ENDPOINT ?? '/auth/session'
 const LOGOUT_ENDPOINT = import.meta.env.VITE_LOGOUT_ENDPOINT ?? '/auth/logout'
 const AUTH_USER_STORAGE_KEY = 'bloom_auth_user'
 const MOOD_PROMPT_DONE_PREFIX = 'bloom_mood_prompt_done'
+const DEFAULT_MOOD_OPTIONS = ['Happy', 'Calm', 'Focused', 'Excited', 'Tired', 'Stressed']
 
 function getBackgroundStyle(variableName: string, imageUrl: string): CSSProperties | undefined {
   if (!imageUrl) {
@@ -407,6 +409,8 @@ function App() {
   const [waterAmountInput, setWaterAmountInput] = useState('8')
   const [moodInput, setMoodInput] = useState('Calm')
   const [askMoodSelection, setAskMoodSelection] = useState('Calm')
+  const [askMoodOptions, setAskMoodOptions] = useState<string[]>(DEFAULT_MOOD_OPTIONS)
+  const [askMoodHasHistory, setAskMoodHasHistory] = useState(false)
   const [isCustomAskMood, setIsCustomAskMood] = useState(false)
   const [askMoodCustomText, setAskMoodCustomText] = useState('')
   const [isLoggingWater, setIsLoggingWater] = useState(false)
@@ -428,6 +432,7 @@ function App() {
   const moodsUrl = useMemo(() => getApiUrl(MOODS_ENDPOINT), [])
   const summaryUrl = useMemo(() => getApiUrl(SUMMARY_ENDPOINT), [])
   const communityFeedUrl = useMemo(() => getApiUrl(COMMUNITY_FEED_ENDPOINT), [])
+  const moodOptionsUrl = useMemo(() => getApiUrl(MOOD_OPTIONS_ENDPOINT), [])
   const avatarUrl = useMemo(() => getApiUrl(AVATAR_ENDPOINT), [])
   const sessionUrl = useMemo(() => getApiUrl(SESSION_ENDPOINT), [])
   const logoutUrl = useMemo(() => getApiUrl(LOGOUT_ENDPOINT), [])
@@ -458,11 +463,62 @@ function App() {
     if (!authUser?.userid) {
       setAvatarSelection(getDefaultAvatarSelection())
       setAvatarModalMode(null)
+      setAskMoodOptions(DEFAULT_MOOD_OPTIONS)
+      setAskMoodSelection(DEFAULT_MOOD_OPTIONS[0])
+      setAskMoodHasHistory(false)
       return
     }
 
     setAvatarSelection(loadAvatarSelectionForUser(authUser.userid))
   }, [authUser?.userid])
+
+  useEffect(() => {
+    if (!authUser?.userid) {
+      return
+    }
+
+    let isMounted = true
+
+    async function fetchMoodOptions() {
+      try {
+        const response = await fetch(moodOptionsUrl, { credentials: 'include' })
+        if (!response.ok) {
+          return
+        }
+
+        const payload = (await response.json()) as { options?: string[]; has_history?: boolean }
+        if (!isMounted) {
+          return
+        }
+
+        const options = Array.isArray(payload.options)
+          ? payload.options.map((item) => String(item).trim()).filter(Boolean)
+          : []
+
+        const resolvedOptions = options.length ? options : DEFAULT_MOOD_OPTIONS
+        setAskMoodOptions(resolvedOptions)
+        setAskMoodHasHistory(Boolean(payload.has_history))
+
+        setAskMoodSelection((current) => {
+          if (resolvedOptions.includes(current)) {
+            return current
+          }
+          return resolvedOptions[0]
+        })
+      } catch {
+        if (isMounted) {
+          setAskMoodOptions(DEFAULT_MOOD_OPTIONS)
+          setAskMoodSelection(DEFAULT_MOOD_OPTIONS[0])
+        }
+      }
+    }
+
+    void fetchMoodOptions()
+
+    return () => {
+      isMounted = false
+    }
+  }, [authUser?.userid, moodOptionsUrl])
 
   useEffect(() => {
     if (!authUser?.userid) {
@@ -850,6 +906,16 @@ function App() {
         applySummaryState(payload.summary as DailySummaryResponse)
       }
 
+      setAskMoodHasHistory(true)
+      if (isCustomAskMood) {
+        setAskMoodOptions((current) => {
+          if (current.some((item) => item.toLowerCase() === selectedMood.toLowerCase())) {
+            return current
+          }
+          return [...current, selectedMood]
+        })
+      }
+
       markMoodPromptCompletedToday(authUser.userid, getTodayDayString())
       setMoodInput(selectedMood)
       await fetchWeekActivityData(authUser.userid)
@@ -1231,6 +1297,8 @@ function App() {
     return (
       <AskMoodPage
         greetingName={authUser?.name ?? 'Bloom User'}
+        moodOptions={askMoodOptions}
+        isReturningUser={askMoodHasHistory}
         selectedMood={askMoodSelection}
         customMoodEnabled={isCustomAskMood}
         customMoodText={askMoodCustomText}

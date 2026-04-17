@@ -73,27 +73,37 @@
 .ask-mood-copy {
   margin: 0;
   text-align: center;
+  font-size: 0.9rem;
+  opacity: 0.85;
 }
 
 .mood-option-grid {
   margin-top: 16px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(152px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
 }
 
 .mood-option-btn {
-  min-height: 54px;
+  min-height: 38px;
   border: 2px solid var(--ink);
-  box-shadow: 4px 4px 0 rgba(30, 82, 115, 0.4);
+  border-radius: 999px;
+  box-shadow: 3px 3px 0 rgba(30, 82, 115, 0.35);
   background: #f3f4ef;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  padding: 6px 12px;
+  width: fit-content;
   font-family: 'Space Mono', 'Consolas', monospace;
   font-weight: 700;
+  font-size: 0.88rem;
+  line-height: 1.1;
+  white-space: nowrap;
   cursor: pointer;
+  gap: 0;
+  transition: width 0.3s ease, gap 0.3s ease;
 }
 
 .mood-option-btn.is-selected {
@@ -104,26 +114,40 @@
   background: #e8e0d0;
 }
 
-.mood-emoji {
-  font-size: 1.1rem;
+.mood-pencil {
+  color: #000;
+  font-size: 0.9rem;
+  line-height: 1;
 }
 
-.custom-mood-wrap {
-  margin-top: 14px;
-  display: grid;
-  gap: 8px;
-}
-
-.custom-mood-wrap label {
-  font-weight: 700;
-}
-
-.custom-mood-wrap input {
-  min-height: 44px;
-  border: 2px solid var(--ink);
-  box-shadow: 3px 3px 0 rgba(30, 82, 115, 0.4);
-  padding: 0 12px;
+.mood-expanding-input {
+  border: 0;
+  background: transparent;
   font-family: 'Space Mono', 'Consolas', monospace;
+  font-weight: 700;
+  font-size: 0.88rem;
+  line-height: 1.1;
+  color: var(--ink);
+  width: 0;
+  max-width: 0;
+  padding: 0;
+  opacity: 0;
+  transition: width 0.3s ease, max-width 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+
+.mood-option-btn.is-selected .mood-expanding-input {
+  width: 120px;
+  max-width: 120px;
+  padding: 0 6px;
+  opacity: 1;
+}
+
+.mood-expanding-input:focus {
+  outline: none;
+}
+
+.mood-expanding-input::placeholder {
+  color: rgba(5, 26, 53, 0.55);
 }
 
 .ask-mood-error {
@@ -133,6 +157,41 @@
 
 .ask-mood-continue {
   margin-top: 14px;
+}
+
+@media (max-width: 640px) {
+  .mood-option-grid {
+    justify-content: flex-start;
+  }
+
+  .mood-option-btn {
+    flex: 1 1 calc((100% - 20px) / 3);
+    max-width: calc((100% - 20px) / 3);
+    min-width: 0;
+    width: auto;
+    padding: 8px 10px;
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .mood-option-btn.is-selected .mood-expanding-input {
+    width: 100%;
+    max-width: 100%;
+    padding: 0 6px;
+  }
+}
+
+@media (max-width: 420px) {
+  .mood-option-btn {
+    flex-basis: calc((100% - 10px) / 2);
+    max-width: calc((100% - 10px) / 2);
+  }
+
+  .mood-option-btn.is-selected .mood-expanding-input {
+    width: 100%;
+    max-width: 100%;
+  }
 }
 
 .landing-page {
