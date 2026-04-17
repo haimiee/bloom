@@ -233,7 +233,7 @@ export function DashboardPage({
             </article>
 
             <article className="friends-card">
-              <h2>Your Friends</h2>
+              <h2>The Bloom Community</h2>
               {communityFeedError ? (
                 <p>{communityFeedError}</p>
               ) : communityFeed.length ? (
