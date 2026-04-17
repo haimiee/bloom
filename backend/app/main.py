@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query, Request, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import json
 import sqlite3
 from datetime import datetime, timezone
 import hashlib
@@ -67,6 +68,9 @@ class LoginEntry(BaseModel):
     email: str
     password: str
 
+class AvatarEntry(BaseModel):
+    avatar: dict[str, str]
+
 # database connection helpers
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -86,6 +90,11 @@ def init_db():
             created_at TEXT NOT NULL
         )
     """)
+
+    cursor.execute("PRAGMA table_info(users)")
+    user_columns = {row[1] for row in cursor.fetchall()}
+    if "avatar_json" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN avatar_json TEXT")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS water_logs (
@@ -239,7 +248,7 @@ def get_user_by_email(email: str):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, name, email, password_hash, created_at FROM users WHERE email = ?",
+        "SELECT id, name, email, password_hash, created_at, avatar_json FROM users WHERE email = ?",
         (email,),
     )
     row = cursor.fetchone()
@@ -250,24 +259,59 @@ def get_user_by_id(userid: int):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, name, email, created_at FROM users WHERE id = ?",
+        "SELECT id, name, email, created_at, avatar_json FROM users WHERE id = ?",
         (userid,),
     )
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
 
-def create_user(name: str, email: str, password_hash: str):
+def parse_avatar_json(avatar_json: str | None):
+    if not avatar_json:
+        return None
+
+    try:
+        parsed = json.loads(avatar_json)
+    except (TypeError, ValueError):
+        return None
+
+    if not isinstance(parsed, dict):
+        return None
+
+    return {str(key): str(value) for key, value in parsed.items() if isinstance(key, str) and isinstance(value, str)}
+
+def get_other_users(current_userid: int):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO users (name, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
-        (name, email, password_hash, get_eastern_now().isoformat()),
+        "SELECT id, name, avatar_json FROM users WHERE id != ? ORDER BY name COLLATE NOCASE ASC",
+        (current_userid,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def create_user(name: str, email: str, password_hash: str, avatar_json: str = "{}"): 
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO users (name, email, password_hash, created_at, avatar_json) VALUES (?, ?, ?, ?, ?)",
+        (name, email, password_hash, get_eastern_now().isoformat(), avatar_json),
     )
     conn.commit()
     user_id = cursor.lastrowid
     conn.close()
     return user_id
+
+def update_user_avatar(userid: int, avatar: dict[str, str]):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET avatar_json = ? WHERE id = ?",
+        (json.dumps(avatar, sort_keys=True), userid),
+    )
+    conn.commit()
+    conn.close()
 
 def build_activity_log_response(userid: int, activity: str, payload: dict):
     day_string = get_day_string()
@@ -352,6 +396,72 @@ def get_mood_logs_for_day(day_string: str, userid: int):
     conn.close()
 
     return [dict(row) for row in rows]
+
+def get_latest_water_log(userid: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, amount, created_at FROM water_logs WHERE userid = ? ORDER BY created_at DESC LIMIT 1",
+        (userid,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_latest_mood_log(userid: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, mood, created_at FROM mood_logs WHERE userid = ? ORDER BY created_at DESC LIMIT 1",
+        (userid,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_community_feed(current_userid: int):
+    entries: list[dict] = []
+
+    for user in get_other_users(current_userid):
+        latest_water = get_latest_water_log(user["id"])
+        latest_mood = get_latest_mood_log(user["id"])
+
+        if not latest_water and not latest_mood:
+            continue
+
+        latest_entry = None
+        if latest_water and latest_mood:
+            water_time = datetime.fromisoformat(latest_water["created_at"])
+            mood_time = datetime.fromisoformat(latest_mood["created_at"])
+            latest_entry = ("water", latest_water) if water_time >= mood_time else ("mood", latest_mood)
+        elif latest_water:
+            latest_entry = ("water", latest_water)
+        else:
+            latest_entry = ("mood", latest_mood)
+
+        if not latest_entry:
+            continue
+
+        activity_type, activity_payload = latest_entry
+        summary = (
+            f"logged {activity_payload['amount']} oz water"
+            if activity_type == "water"
+            else f"logged mood: {activity_payload['mood']}"
+        )
+
+        entries.append(
+            {
+                "userid": user["id"],
+                "name": user["name"],
+                "activity_type": activity_type,
+                "summary": summary,
+                "created_at": activity_payload["created_at"],
+                "avatar": parse_avatar_json(user.get("avatar_json")),
+            }
+        )
+
+    entries.sort(key=lambda item: item["created_at"], reverse=True)
+    return entries
 
 # combined summary logic
 def get_daily_summary(day_string: str, userid: int):
@@ -454,6 +564,11 @@ def log_mood(entry: LogMoodRequest, userid: int = Depends(get_authenticated_user
     create_mood_log(entry.mood, userid)
     return LogMoodResponse(entry.mood, userid)
 
+@app.post("/avatar")
+def save_avatar(entry: AvatarEntry, userid: int = Depends(get_authenticated_userid)):
+    update_user_avatar(userid, entry.avatar)
+    return {"message": "Avatar saved."}
+
 @app.get("/moods")
 def get_moods(date_str: str | None = Query(default=None, alias="date"), userid: int = Depends(get_authenticated_userid)):
     day_string = get_day_string(date_str)
@@ -467,3 +582,9 @@ def get_moods(date_str: str | None = Query(default=None, alias="date"), userid: 
 def summary(date_str: str | None = Query(default=None, alias="date"), userid: int = Depends(get_authenticated_userid)):
     day_string = get_day_string(date_str)
     return get_daily_summary(day_string, userid)
+
+@app.get("/community-feed")
+def community_feed(userid: int = Depends(get_authenticated_userid)):
+    return {
+        "entries": get_community_feed(userid)
+    }
