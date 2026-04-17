@@ -1483,31 +1483,30 @@ function App() {
     )
   }
 
+  let pageContent = renderLanding()
+
   if (page === 'signup') {
-    return renderSignup()
+    pageContent = renderSignup()
+  } else if (page === 'login') {
+    pageContent = renderLogin()
+  } else if (page === 'dashboard') {
+    pageContent = renderDashboard()
+  } else if (page === 'activity') {
+    pageContent = renderActivity()
+  } else if (page === 'profile') {
+    pageContent = renderProfile()
+  } else if (page === 'ask-mood') {
+    pageContent = renderAskMood()
   }
 
-  if (page === 'login') {
-    return renderLogin()
-  }
-
-  if (page === 'dashboard') {
-    return renderDashboard()
-  }
-
-  if (page === 'activity') {
-    return renderActivity()
-  }
-
-  if (page === 'profile') {
-    return renderProfile()
-  }
-
-  if (page === 'ask-mood') {
-    return renderAskMood()
-  }
-
-  return renderLanding()
+  return (
+    <>
+      <div className="bloom-global-logo" aria-hidden="true">
+        <img className="bloom-global-logo-image" src={bloomLogo} alt="" draggable={false} />
+      </div>
+      {pageContent}
+    </>
+  )
 }
 
 export default App

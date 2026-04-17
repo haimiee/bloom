@@ -258,6 +258,22 @@
   font-size: clamp(1.2rem, 3.4vw, 2.4rem);
 }
 
+.bloom-global-logo {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 85;
+  pointer-events: none;
+}
+
+.bloom-global-logo-image {
+  width: clamp(92px, 16vw, 160px);
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(5, 26, 53, 0.45));
+}
+
 .brand-chip {
   min-width: 102px;
   min-height: 42px;
