@@ -92,12 +92,14 @@ export function getDefaultAvatarSelection(): AvatarSelection {
 }
 
 export function getAvatarLayerSrc(layer: AvatarLayerKey, avatar: AvatarSelection) {
+  const selectedId = typeof avatar?.[layer] === 'string' ? avatar[layer] : ''
+
   // Don't render "none" options (no hair)
-  if (avatar[layer].endsWith('-none')) {
+  if (selectedId.endsWith('-none')) {
     return ''
   }
 
-  const option = AVATAR_ASSETS[layer].find((item) => item.id === avatar[layer])
+  const option = AVATAR_ASSETS[layer].find((item) => item.id === selectedId)
   return option?.src ?? ''
 }
 
