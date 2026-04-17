@@ -71,7 +71,11 @@ export default function AskMoodPage({
           <button
             type="button"
             className={`mood-option-btn custom-toggle ${customMoodEnabled ? 'is-selected' : ''}`}
-            onClick={() => onToggleCustomMood()}
+            onClick={() => {
+              if (!customMoodEnabled) {
+                onToggleCustomMood()
+              }
+            }}
             aria-label="Add custom mood"
           >
             <span className="mood-pencil" aria-hidden="true">
@@ -82,6 +86,8 @@ export default function AskMoodPage({
               autoFocus={customMoodEnabled}
               className="mood-expanding-input"
               value={customMoodText}
+              onClick={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
               onChange={(event) => onCustomMoodTextChange(event.target.value)}
               placeholder="Type mood"
               aria-label="Type custom mood"

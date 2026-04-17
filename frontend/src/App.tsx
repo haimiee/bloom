@@ -1178,8 +1178,14 @@ function App() {
 
   function renderBloomLogo(mode: 'nav' | 'auth') {
     return (
-      <img className={`bloom-logo ${mode}`} src={bloomLogo} alt="Bloom" draggable={false} />
+      <span className={`bloom-logo ${mode}`} aria-label="Bloom">
+        Bloom
+      </span>
     )
+  }
+
+  function renderBloomFlower(mode: 'nav' | 'auth') {
+    return <img className={`bloom-flower ${mode}`} src={bloomLogo} alt="" aria-hidden="true" draggable={false} />
   }
 
   function renderHamburgerMenu() {
@@ -1268,10 +1274,11 @@ function App() {
       <header className="dashboard-nav">
         <div className="dashboard-nav-left">
           {renderHamburgerMenu()}
+          {renderBloomLogo('nav')}
         </div>
 
         <div className="dashboard-nav-center" aria-hidden="true">
-          {renderBloomLogo('nav')}
+          {renderBloomFlower('nav')}
         </div>
 
         <div className="dashboard-nav-right">
@@ -1327,7 +1334,7 @@ function App() {
           setIsCustomAskMood(false)
           setAskMoodSelection(mood)
         }}
-        onToggleCustomMood={() => setIsCustomAskMood((current) => !current)}
+        onToggleCustomMood={() => setIsCustomAskMood(true)}
         onCustomMoodTextChange={setAskMoodCustomText}
         onContinue={() => void handleAskMoodContinue()}
       />
