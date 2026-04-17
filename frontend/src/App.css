@@ -251,27 +251,13 @@
 }
 
 .bloom-logo.nav {
-  font-size: clamp(1rem, 2.8vw, 2rem);
+  width: clamp(88px, 13vw, 150px);
+  height: auto;
 }
 
 .bloom-logo.auth {
-  font-size: clamp(1.2rem, 3.4vw, 2.4rem);
-}
-
-.bloom-global-logo {
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 85;
-  pointer-events: none;
-}
-
-.bloom-global-logo-image {
-  width: clamp(92px, 16vw, 160px);
+  width: clamp(104px, 18vw, 176px);
   height: auto;
-  display: block;
-  filter: drop-shadow(0 2px 4px rgba(5, 26, 53, 0.45));
 }
 
 .brand-chip {
@@ -747,6 +733,14 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.dashboard-nav-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .dashboard-nav-left {

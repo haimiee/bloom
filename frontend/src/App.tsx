@@ -1178,9 +1178,7 @@ function App() {
 
   function renderBloomLogo(mode: 'nav' | 'auth') {
     return (
-      <span className={`bloom-logo ${mode}`} aria-label="Bloom">
-        Bloom
-      </span>
+      <img className={`bloom-logo ${mode}`} src={bloomLogo} alt="Bloom" draggable={false} />
     )
   }
 
@@ -1270,6 +1268,9 @@ function App() {
       <header className="dashboard-nav">
         <div className="dashboard-nav-left">
           {renderHamburgerMenu()}
+        </div>
+
+        <div className="dashboard-nav-center" aria-hidden="true">
           {renderBloomLogo('nav')}
         </div>
 
@@ -1499,14 +1500,7 @@ function App() {
     pageContent = renderAskMood()
   }
 
-  return (
-    <>
-      <div className="bloom-global-logo" aria-hidden="true">
-        <img className="bloom-global-logo-image" src={bloomLogo} alt="" draggable={false} />
-      </div>
-      {pageContent}
-    </>
-  )
+  return pageContent
 }
 
 export default App
