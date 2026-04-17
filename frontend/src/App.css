@@ -218,6 +218,14 @@
   justify-content: space-between;
 }
 
+.landing-nav-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
 .landing-nav nav {
   display: flex;
   gap: 10px;
@@ -2278,6 +2286,14 @@
   .landing-nav {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .landing-nav-center {
+    position: static;
+    transform: none;
+    display: flex;
+    justify-content: center;
+    margin: 0 auto 6px;
   }
 
   .landing-nav nav {

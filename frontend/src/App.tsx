@@ -1167,6 +1167,7 @@ function App() {
     return (
       <LandingPage
         logoNode={renderBloomLogo('nav')}
+        flowerNode={renderBloomFlower('nav')}
         heroImageVisible={heroImageVisible}
         landingHeroImageUrl={LANDING_HERO_IMAGE_URL}
         onHeroImageError={() => setHeroImageVisible(false)}

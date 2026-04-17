@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 type LandingPageProps = {
   logoNode: ReactNode
+  flowerNode: ReactNode
   heroImageVisible: boolean
   landingHeroImageUrl: string
   onHeroImageError: () => void
@@ -11,6 +12,7 @@ type LandingPageProps = {
 
 export default function LandingPage({
   logoNode,
+  flowerNode,
   heroImageVisible,
   landingHeroImageUrl,
   onHeroImageError,
@@ -21,6 +23,9 @@ export default function LandingPage({
     <div className="landing-page">
       <header className="landing-nav">
         {logoNode}
+        <div className="landing-nav-center" aria-hidden="true">
+          {flowerNode}
+        </div>
         <nav>
           <button className="nav-btn" onClick={onGoSignUp}>
             Sign Up
