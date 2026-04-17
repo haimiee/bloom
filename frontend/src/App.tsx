@@ -1,5 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import './App.css'
+import landingLandscapeGif from '../assets/images/landingpage/landscape.gif'
+import plantStage1Image from '../assets/images/plant/stage1.png'
+import plantStage2Image from '../assets/images/plant/stage2.png'
+import plantStage3Image from '../assets/images/plant/stage3.png'
+import plantStage4Image from '../assets/images/plant/stage4.png'
 import LandingPage from './screens/LandingPage'
 import LoginPage from './screens/LoginPage'
 import SignupPage from './screens/SignupPage'
@@ -7,11 +12,12 @@ import AskMoodPage from './screens/AskMoodPage'
 import { ActivityPage, DashboardPage } from './screens/DashboardPage'
 import ProfilePage from './screens/ProfilePage'
 import AvatarEditorModal from './components/AvatarEditorModal'
+import AvatarPreview from './components/AvatarPreview'
+import { getDefaultAvatarSelection } from './avatar'
 import {
   AVATAR_ASSETS,
   AvatarLayerKey,
   AvatarSelection,
-  getDefaultAvatarSelection,
   isAvatarSetupDone,
   loadAvatarSelectionForUser,
   markAvatarSetupDone,
@@ -42,6 +48,15 @@ type MoodLog = {
   id: number
   mood: string
   created_at: string
+}
+
+type CommunityFeedEntry = {
+  userid: number
+  name: string
+  activity_type: 'water' | 'mood'
+  summary: string
+  created_at: string
+  avatar?: AvatarSelection | null
 }
 
 type WaterSummaryResponse = {
@@ -78,16 +93,15 @@ type AuthUser = {
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`
-const LANDING_HERO_IMAGE_URL = import.meta.env.VITE_LANDING_HERO_IMAGE_URL ?? '/landing-hero.png'
+const LANDING_HERO_IMAGE_URL = import.meta.env.VITE_LANDING_HERO_IMAGE_URL ?? landingLandscapeGif
 const LANDING_BACKGROUND_IMAGE_URL = import.meta.env.VITE_LANDING_BACKGROUND_IMAGE_URL ?? ''
 const DASHBOARD_BACKGROUND_IMAGE_URL = import.meta.env.VITE_DASHBOARD_BACKGROUND_IMAGE_URL ?? ''
-const PLANT_IMAGE_URL = import.meta.env.VITE_PLANT_IMAGE_URL ?? ''
 const PLANT_STAGE_IMAGE_URLS: Record<number, string> = {
-  0: import.meta.env.VITE_PLANT_STAGE_0_IMAGE_URL ?? '',
-  1: import.meta.env.VITE_PLANT_STAGE_1_IMAGE_URL ?? '',
-  2: import.meta.env.VITE_PLANT_STAGE_2_IMAGE_URL ?? '',
-  3: import.meta.env.VITE_PLANT_STAGE_3_IMAGE_URL ?? '',
-  4: import.meta.env.VITE_PLANT_STAGE_4_IMAGE_URL ?? '',
+  0: '',
+  1: import.meta.env.VITE_PLANT_STAGE_1_IMAGE_URL ?? plantStage1Image,
+  2: import.meta.env.VITE_PLANT_STAGE_2_IMAGE_URL ?? plantStage2Image,
+  3: import.meta.env.VITE_PLANT_STAGE_3_IMAGE_URL ?? plantStage3Image,
+  4: import.meta.env.VITE_PLANT_STAGE_4_IMAGE_URL ?? plantStage4Image,
 }
 const SIGNUP_ENDPOINT = import.meta.env.VITE_SIGNUP_ENDPOINT ?? '/auth/signup'
 const LOGIN_ENDPOINT = import.meta.env.VITE_LOGIN_ENDPOINT ?? '/auth/login'
@@ -96,10 +110,11 @@ const LOG_WATER_ENDPOINT = import.meta.env.VITE_LOG_WATER_ENDPOINT ?? '/water'
 const LOG_MOOD_ENDPOINT = import.meta.env.VITE_LOG_MOOD_ENDPOINT ?? '/mood'
 const MOODS_ENDPOINT = import.meta.env.VITE_MOODS_ENDPOINT ?? '/moods'
 const SUMMARY_ENDPOINT = import.meta.env.VITE_SUMMARY_ENDPOINT ?? '/summary'
+const COMMUNITY_FEED_ENDPOINT = import.meta.env.VITE_COMMUNITY_FEED_ENDPOINT ?? '/community-feed'
+const AVATAR_ENDPOINT = import.meta.env.VITE_AVATAR_ENDPOINT ?? '/avatar'
 const SESSION_ENDPOINT = import.meta.env.VITE_SESSION_ENDPOINT ?? '/auth/session'
 const LOGOUT_ENDPOINT = import.meta.env.VITE_LOGOUT_ENDPOINT ?? '/auth/logout'
 const AUTH_USER_STORAGE_KEY = 'bloom_auth_user'
-const PROFILE_PHOTO_STORAGE_PREFIX = 'bloom_profile_photo_v1:'
 const MOOD_PROMPT_DONE_PREFIX = 'bloom_mood_prompt_done'
 
 function getBackgroundStyle(variableName: string, imageUrl: string): CSSProperties | undefined {
@@ -274,7 +289,7 @@ function getPlantStageLabel(stage: number) {
   if (stage === 1) {
     return 'Seedling'
   }
-  return 'Seed'
+  return 'Nothing'
 }
 
 function getTodayDayString() {
@@ -359,19 +374,6 @@ function getUserHandle(email: string) {
   return `@${localPart}`
 }
 
-function loadProfilePhotoForUser(userid: number): string | null {
-  try {
-    const value = localStorage.getItem(`${PROFILE_PHOTO_STORAGE_PREFIX}${userid}`)
-    return value || null
-  } catch {
-    return null
-  }
-}
-
-function saveProfilePhotoForUser(userid: number, imageDataUrl: string) {
-  localStorage.setItem(`${PROFILE_PHOTO_STORAGE_PREFIX}${userid}`, imageDataUrl)
-}
-
 function App() {
   const [page, setPage] = useState<Page>(() => getInitialPage(Boolean(loadAuthUserFromStorage())))
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUserFromStorage())
@@ -397,8 +399,10 @@ function App() {
   const [dailySummary, setDailySummary] = useState<DailySummaryResponse | null>(null)
   const [weekActivity, setWeekActivity] = useState<WeekActivityDay[]>([])
   const [moodLogs, setMoodLogs] = useState<MoodLog[]>([])
+  const [communityFeed, setCommunityFeed] = useState<CommunityFeedEntry[]>([])
   const [waterError, setWaterError] = useState('')
   const [moodError, setMoodError] = useState('')
+  const [communityFeedError, setCommunityFeedError] = useState('')
   const [isLoadingDailyData, setIsLoadingDailyData] = useState(false)
   const [waterAmountInput, setWaterAmountInput] = useState('8')
   const [moodInput, setMoodInput] = useState('Calm')
@@ -412,12 +416,10 @@ function App() {
   const [activityMessage, setActivityMessage] = useState('')
   const [activityError, setActivityError] = useState('')
   const [heroImageVisible, setHeroImageVisible] = useState(true)
-  const [plantDisplayMode, setPlantDisplayMode] = useState<'ground' | 'pot'>('ground')
   const [navMenuOpen, setNavMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [avatarSelection, setAvatarSelection] = useState<AvatarSelection>(() => getDefaultAvatarSelection())
   const [avatarModalMode, setAvatarModalMode] = useState<'onboarding' | 'editor' | null>(null)
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null)
 
   const signupUrl = useMemo(() => getApiUrl(SIGNUP_ENDPOINT), [])
   const loginUrl = useMemo(() => getApiUrl(LOGIN_ENDPOINT), [])
@@ -425,6 +427,8 @@ function App() {
   const logMoodUrl = useMemo(() => getApiUrl(LOG_MOOD_ENDPOINT), [])
   const moodsUrl = useMemo(() => getApiUrl(MOODS_ENDPOINT), [])
   const summaryUrl = useMemo(() => getApiUrl(SUMMARY_ENDPOINT), [])
+  const communityFeedUrl = useMemo(() => getApiUrl(COMMUNITY_FEED_ENDPOINT), [])
+  const avatarUrl = useMemo(() => getApiUrl(AVATAR_ENDPOINT), [])
   const sessionUrl = useMemo(() => getApiUrl(SESSION_ENDPOINT), [])
   const logoutUrl = useMemo(() => getApiUrl(LOGOUT_ENDPOINT), [])
 
@@ -454,12 +458,10 @@ function App() {
     if (!authUser?.userid) {
       setAvatarSelection(getDefaultAvatarSelection())
       setAvatarModalMode(null)
-      setProfilePhotoUrl(null)
       return
     }
 
     setAvatarSelection(loadAvatarSelectionForUser(authUser.userid))
-    setProfilePhotoUrl(loadProfilePhotoForUser(authUser.userid))
   }, [authUser?.userid])
 
   useEffect(() => {
@@ -620,6 +622,7 @@ function App() {
       setWaterSummary(null)
       setDailySummary(null)
       setMoodLogs([])
+      setCommunityFeed([])
       setWeekActivity([])
       setWaterError('No logged-in user was found for hydration lookup.')
       return
@@ -635,6 +638,7 @@ function App() {
       setIsLoadingDailyData(true)
       setWaterError('')
       setMoodError('')
+      setCommunityFeedError('')
 
       const response = await fetch(requestSummaryUrl.toString(), { credentials: 'include' })
       if (!response.ok) {
@@ -654,11 +658,22 @@ function App() {
       } else {
         setMoodError(`Unable to load moods (${moodsResponse.status}).`)
       }
+
+      const communityResponse = await fetch(communityFeedUrl, { credentials: 'include' })
+      if (communityResponse.ok) {
+        const communityPayload = (await communityResponse.json()) as { entries?: CommunityFeedEntry[] }
+        if (Array.isArray(communityPayload.entries)) {
+          setCommunityFeed(communityPayload.entries)
+        }
+      } else {
+        setCommunityFeedError(`Unable to load community feed (${communityResponse.status}).`)
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load summary data.'
       setWaterSummary(null)
       setDailySummary(null)
       setMoodLogs([])
+      setCommunityFeed([])
       setWeekActivity([])
       setWaterError(message)
     } finally {
@@ -672,11 +687,6 @@ function App() {
     }
     void fetchDailyData()
   }, [page, authUser?.userid])
-
-  useEffect(() => {
-    const plantStage = waterSummary?.plant_stage ?? 0
-    setPlantDisplayMode(plantStage >= 4 ? 'ground' : 'pot')
-  }, [waterSummary?.plant_stage])
 
   useEffect(() => {
     setNavMenuOpen(false)
@@ -871,36 +881,33 @@ function App() {
     setAvatarModalMode(null)
   }
 
-  function handleSaveAvatar() {
+  async function handleSaveAvatar() {
     if (!authUser?.userid) {
       setAvatarModalMode(null)
       return
     }
 
     saveAvatarSelectionForUser(authUser.userid, avatarSelection)
-    setAvatarModalMode(null)
-  }
+    try {
+      const response = await fetch(avatarUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ avatar: avatarSelection }),
+      })
 
-  function handleUploadProfilePhoto(file: File) {
-    if (!authUser?.userid) {
-      return
-    }
-
-    if (!file.type.startsWith('image/')) {
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : null
-      if (!result) {
-        return
+      if (!response.ok) {
+        throw new Error(`Unable to save avatar (${response.status}).`)
       }
 
-      setProfilePhotoUrl(result)
-      saveProfilePhotoForUser(authUser.userid, result)
+      setStatusMessage('Avatar saved.')
+      setIsErrorMessage(false)
+      setAvatarModalMode(null)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save avatar.'
+      setStatusMessage(message)
+      setIsErrorMessage(true)
     }
-    reader.readAsDataURL(file)
   }
 
   function navigateTo(nextPage: Page, options?: { replace?: boolean; ignoreAuthGuard?: boolean }) {
@@ -1142,15 +1149,7 @@ function App() {
           aria-expanded={profileMenuOpen}
           onClick={() => setProfileMenuOpen((current) => !current)}
         >
-          {profilePhotoUrl ? (
-            <img src={profilePhotoUrl} alt="" aria-hidden="true" className="profile-btn-photo" />
-          ) : (
-            <span className="profile-kawaii-face" aria-hidden="true">
-              <span className="profile-kawaii-eye left" />
-              <span className="profile-kawaii-eye right" />
-              <span className="profile-kawaii-mouth" />
-            </span>
-          )}
+          <AvatarPreview avatar={avatarSelection} className="avatar-preview-nav-head avatar-preview-headshot" />
         </button>
 
         {profileMenuOpen && (
@@ -1180,6 +1179,9 @@ function App() {
   }
 
   function renderDashboardNav(activePage: 'dashboard' | 'activity' | 'profile') {
+    const longestStreak = getLongestActiveStreak(weekActivity)
+    const streakTitle = `You're on a ${longestStreak}-day streak!`
+
     return (
       <header className="dashboard-nav">
         <div className="dashboard-nav-left">
@@ -1187,76 +1189,40 @@ function App() {
           {renderBloomLogo('nav')}
         </div>
 
-        <div className="dashboard-nav-right">{renderProfileMenu()}</div>
+        <div className="dashboard-nav-right">
+          <div className="streak-badge" aria-label={streakTitle}>
+            <span className="streak-flame" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="img" focusable="false">
+                <path d="M12.1 2.5c.5 2.4-.6 4.1-1.6 5.6-.9 1.4-1.7 2.6-1.2 4.2.2.9.8 1.7 1.7 2.1-.1-.6-.1-1.2.1-1.8.5-1.6 1.9-2.5 3.1-3.3 1.4-1 2.6-1.8 2.8-3.7 1.9 1.8 3 4.3 3 6.9 0 5-3.6 8.6-8.1 8.6S4 17.3 4 12.8c0-3 1.6-5.9 4.2-7.8-.5 1.7-.1 3.2 1 4.4.2-2.7 1.8-4.9 2.9-6.9z" />
+              </svg>
+            </span>
+            <span className="streak-count" aria-hidden="true">{longestStreak}</span>
+            <span className="streak-tooltip" role="tooltip">
+              {streakTitle}
+            </span>
+          </div>
+          {renderProfileMenu()}
+        </div>
       </header>
     )
   }
 
   function renderPlantStagePanel() {
     const stage = waterSummary?.plant_stage ?? 0
-    const hydrationRatio = clampProgress(waterSummary?.percentage ?? 0)
-    const hydrationPercent = Math.round((waterSummary?.percentage ?? 0) * 100)
-    const isFullyBloomed = stage >= 4
-    const useGroundDisplay = isFullyBloomed && plantDisplayMode === 'ground'
-    const plantImageUrl = PLANT_STAGE_IMAGE_URLS[stage] || PLANT_IMAGE_URL
-    const handlePlantToggle = () => {
-      if (!isFullyBloomed) {
-        return
-      }
-
-      setPlantDisplayMode((current) => (current === 'ground' ? 'pot' : 'ground'))
-    }
+    const plantImageUrl = PLANT_STAGE_IMAGE_URLS[stage] || ''
 
     return (
       <aside className="plant-panel">
         <h2>Your Plant</h2>
         <p className="plant-stage-text">
-          {isFullyBloomed ? (
-            <strong>Your plant has fully bloomed!</strong>
-          ) : (
-            <>
-              Stage {stage}/4: <strong>{getPlantStageLabel(stage)}</strong>
-            </>
-          )}
+          Stage {stage}/4: <strong>{getPlantStageLabel(stage)}</strong>
         </p>
 
-        <button
-          type="button"
-          className={`plant-visual ${plantImageUrl ? 'has-image' : ''} ${isFullyBloomed ? 'is-clickable' : ''}`}
-          aria-label={
-            isFullyBloomed
-              ? plantDisplayMode === 'ground'
-                ? 'Fully bloomed plant in the ground. Click to place it in a pot.'
-                : 'Fully bloomed plant in a pot. Click to place it in the ground.'
-              : `Plant stage ${stage}`
-          }
-          aria-pressed={isFullyBloomed && plantDisplayMode === 'pot'}
-          onClick={handlePlantToggle}
-        >
+        <div className="plant-visual" aria-label={`Plant stage ${stage}`}>
           {plantImageUrl ? (
             <img className="plant-stage-image" src={plantImageUrl} alt="" aria-hidden="true" draggable={false} />
-          ) : (
-            <>
-              <div className="plant-sun" />
-              <div className="plant-cloud cloud-one" />
-              <div className="plant-cloud cloud-two" />
-              <div className="plant-hills" />
-              {useGroundDisplay ? <div className="plant-ground ground-visible" /> : <div className="plant-ground" />}
-              {!useGroundDisplay && <div className="plant-pot" />}
-              {stage >= 1 && <div className="plant-stem" />}
-              {stage >= 2 && <div className="plant-leaf leaf-left" />}
-              {stage >= 2 && <div className="plant-leaf leaf-right" />}
-              {stage >= 3 && <div className="plant-leaf leaf-top-left" />}
-              {stage >= 3 && <div className="plant-leaf leaf-top-right" />}
-              {stage >= 4 && <div className="plant-bloom" />}
-            </>
-          )}
-        </button>
-
-        <div className="plant-meter">
-          <span style={{ width: `${hydrationPercent}%` }} />
+          ) : null}
         </div>
-        <p className="plant-meta">Hydration: {hydrationPercent}% of daily goal</p>
       </aside>
     )
   }
@@ -1301,7 +1267,6 @@ function App() {
 
   function renderDashboard() {
     const hydrationRatio = clampProgress(waterSummary?.percentage ?? 0)
-    const moodRatio = clampProgress((dailySummary?.moods_logged ?? moodLogs.length) / 3)
     const pageStyle = getBackgroundStyle('--dashboard-background-image', DASHBOARD_BACKGROUND_IMAGE_URL)
     const greeting = getTimeOfDayGreeting()
 
@@ -1319,7 +1284,8 @@ function App() {
           dailySummary={dailySummary}
           waterError={waterError}
           hydrationRatio={hydrationRatio}
-          moodRatio={moodRatio}
+          communityFeed={communityFeed}
+          communityFeedError={communityFeedError}
         />
         {renderAvatarModal()}
       </>
@@ -1353,6 +1319,7 @@ function App() {
           moodInput={moodInput}
           isLoadingDailyData={isLoadingDailyData}
           hydrationPercentage={hydrationPercentage}
+          avatar={avatarSelection}
           onWaterAmountChange={setWaterAmountInput}
           onMoodChange={setMoodInput}
           onSubmitWater={handleLogWater}
@@ -1381,9 +1348,7 @@ function App() {
           longestStreak={longestStreak}
           bioText={bioText}
           avatar={avatarSelection}
-          profilePhotoUrl={profilePhotoUrl}
           onEditAvatar={handleOpenAvatarEditor}
-          onUploadProfilePhoto={handleUploadProfilePhoto}
         />
         {renderAvatarModal()}
       </>

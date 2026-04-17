@@ -1,4 +1,7 @@
-import type { CSSProperties, FormEvent, ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import waterBottleImage from '../../assets/images/logging/waterbottle.png'
+import { getDefaultAvatarSelection, type AvatarSelection } from '../avatar'
+import AvatarPreview from '../components/AvatarPreview'
 
 type WaterSummary = {
   userid: number
@@ -38,6 +41,15 @@ type WeekActivityDay = {
   isToday: boolean
 }
 
+type CommunityFeedEntry = {
+  userid: number
+  name: string
+  activity_type: 'water' | 'mood'
+  summary: string
+  created_at: string
+  avatar?: AvatarSelection | null
+}
+
 type DashboardPageProps = {
   pageStyle?: CSSProperties
   navNode: ReactNode
@@ -50,7 +62,8 @@ type DashboardPageProps = {
   dailySummary: DailySummary
   waterError: string
   hydrationRatio: number
-  moodRatio: number
+  communityFeed: CommunityFeedEntry[]
+  communityFeedError: string
 }
 
 function ProgressBar({ label, percentage, variant }: { label: string; percentage: number; variant: 'blue' | 'green' | 'gold' }) {
@@ -77,6 +90,32 @@ function formatSummaryHeader(dateValue: string) {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+function formatFeedTimeAgo(timestamp: string) {
+  const loggedAt = new Date(timestamp).getTime()
+  if (!Number.isFinite(loggedAt)) {
+    return 'just now'
+  }
+
+  const diffMs = Math.max(0, Date.now() - loggedAt)
+  const diffMinutes = Math.floor(diffMs / 60000)
+
+  if (diffMinutes < 1) {
+    return 'just now'
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) {
+    return `${diffHours}h ago`
+  }
+
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays}d ago`
 }
 
 function toDayString(dateValue: Date) {
@@ -135,7 +174,8 @@ export function DashboardPage({
   dailySummary,
   waterError,
   hydrationRatio,
-  moodRatio,
+  communityFeed,
+  communityFeedError,
 }: DashboardPageProps) {
   return (
     <div className="dashboard-page screen-fade-in" style={pageStyle}>
@@ -194,21 +234,34 @@ export function DashboardPage({
 
             <article className="friends-card">
               <h2>Your Friends</h2>
-              <p>Community feed and friend comparisons will be added in a later milestone.</p>
-              <div className="friend-snapshot">
-                <div className="friend-avatar" />
-                <div>
-                  <p className="friend-name">Wellness Buddy</p>
-                  <p className="friend-note">Hydration streak active</p>
-                </div>
-              </div>
+              {communityFeedError ? (
+                <p>{communityFeedError}</p>
+              ) : communityFeed.length ? (
+                <ul className="friend-feed-list">
+                  {communityFeed.map((entry) => (
+                    <li key={`${entry.userid}-${entry.created_at}`} className="friend-feed-item">
+                      <div className="friend-avatar" aria-hidden="true">
+                        <AvatarPreview
+                          avatar={entry.avatar ?? getDefaultAvatarSelection()}
+                          className="avatar-preview-friend-head avatar-preview-headshot"
+                        />
+                      </div>
+                      <div>
+                        <p className="friend-name">{entry.name}</p>
+                        <p className="friend-note">{entry.summary}</p>
+                      </div>
+                      <span className="friend-time">{formatFeedTimeAgo(entry.created_at)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No community activity yet.</p>
+              )}
             </article>
           </section>
 
           <section className="progress-stack">
             <ProgressBar label="Hydration Progress" percentage={hydrationRatio} variant="blue" />
-            <ProgressBar label="Activity Progress" percentage={moodRatio} variant="green" />
-            <ProgressBar label="Consistency Score" percentage={(hydrationRatio + moodRatio) / 2} variant="gold" />
           </section>
 
           <section className="dashboard-actions">
@@ -248,10 +301,37 @@ type ActivityPageProps = {
   moodInput: string
   isLoadingDailyData: boolean
   hydrationPercentage: number
+  avatar: AvatarSelection
   onWaterAmountChange: (value: string) => void
   onMoodChange: (value: string) => void
   onSubmitWater: (event: FormEvent<HTMLFormElement>) => void
   onSubmitMood: (event: FormEvent<HTMLFormElement>) => void
+}
+
+function formatTimeAgo(timestamp: string) {
+  const logTime = new Date(timestamp).getTime()
+  if (!Number.isFinite(logTime)) {
+    return 'logged just now'
+  }
+
+  const diffMs = Math.max(0, Date.now() - logTime)
+  const diffMinutes = Math.floor(diffMs / 60000)
+
+  if (diffMinutes < 1) {
+    return 'logged just now'
+  }
+
+  if (diffMinutes < 60) {
+    return `logged ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) {
+    return `logged ${diffHours} hour${diffHours === 1 ? '' : 's'} ago`
+  }
+
+  const diffDays = Math.floor(diffHours / 24)
+  return `logged ${diffDays} day${diffDays === 1 ? '' : 's'} ago`
 }
 
 export function ActivityPage({
@@ -274,11 +354,45 @@ export function ActivityPage({
   moodInput,
   isLoadingDailyData,
   hydrationPercentage,
+  avatar,
   onWaterAmountChange,
   onMoodChange,
   onSubmitWater,
   onSubmitMood,
 }: ActivityPageProps) {
+  const [playSipAnimation, setPlaySipAnimation] = useState(false)
+  const waterLogs = waterSummary?.water_logs ?? []
+  const recentLog = waterLogs.length ? waterLogs[waterLogs.length - 1] : null
+  const olderLogs = waterLogs.length > 1 ? waterLogs.slice(0, -1).reverse() : []
+
+  useEffect(() => {
+    if (!isLoggingWater) {
+      return
+    }
+
+    setPlaySipAnimation(false)
+
+    const frameId = window.requestAnimationFrame(() => {
+      setPlaySipAnimation(true)
+    })
+
+    const resetId = window.setTimeout(() => {
+      setPlaySipAnimation(false)
+    }, 760)
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      window.clearTimeout(resetId)
+    }
+  }, [isLoggingWater])
+
+  function adjustWaterAmount(delta: number) {
+    const currentAmount = Number.parseInt(waterAmountInput, 10)
+    const safeCurrent = Number.isFinite(currentAmount) ? currentAmount : 8
+    const nextAmount = Math.max(1, safeCurrent + delta)
+    onWaterAmountChange(String(nextAmount))
+  }
+
   return (
     <div className="dashboard-page screen-fade-in" style={pageStyle}>
       {navNode}
@@ -286,7 +400,6 @@ export function ActivityPage({
       <main className="activity-main">
         <section className="greeting-banner">
           <h1>{greetingText}, {greetingName}!</h1>
-          <p>Track your activity and water, then watch your plant react as you progress.</p>
         </section>
 
         <section className="week-summary-box" aria-label="Weekly activity summary">
@@ -306,21 +419,36 @@ export function ActivityPage({
         <div className="activity-content">
           <section className="activity-card">
             <h1>Activity Logging</h1>
-            <p>Log what you do now. Calendar interactions and extra activities can be layered in next.</p>
 
-            <form className="activity-form" onSubmit={onSubmitWater}>
-              <label htmlFor="water-amount">Water Amount (oz)</label>
-              <input
-                id="water-amount"
-                type="number"
-                min={1}
-                step={1}
-                value={waterAmountInput}
-                onChange={(event) => onWaterAmountChange(event.target.value)}
-              />
-              <button className="primary-action" type="submit" disabled={isLoggingWater}>
-                {isLoggingWater ? 'Saving...' : 'Log Water'}
-              </button>
+            <form className="hydration-playground" onSubmit={onSubmitWater}>
+              <div className={`hydration-avatar-wrap ${playSipAnimation ? 'is-sipping' : ''}`}>
+                <AvatarPreview avatar={avatar} className="avatar-preview-hydration" />
+              </div>
+
+              <div className="hydration-controls">
+                <label htmlFor="water-amount">Amount (oz)</label>
+                <div className="hydration-stepper">
+                  <button type="button" className="stepper-btn" onClick={() => adjustWaterAmount(-1)} aria-label="Decrease water amount">
+                    -
+                  </button>
+                  <input
+                    id="water-amount"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={waterAmountInput}
+                    onChange={(event) => onWaterAmountChange(event.target.value)}
+                  />
+                  <button type="button" className="stepper-btn" onClick={() => adjustWaterAmount(1)} aria-label="Increase water amount">
+                    +
+                  </button>
+                </div>
+
+                <button className={`water-bottle-btn ${playSipAnimation ? 'is-pouring' : ''}`} type="submit" disabled={isLoggingWater}>
+                  <img src={waterBottleImage} alt="Water bottle" draggable={false} />
+                  <span>{isLoggingWater ? 'Logging...' : 'Drink + Log Water'}</span>
+                </button>
+              </div>
             </form>
 
             <form className="activity-form mood-form" onSubmit={onSubmitMood}>
@@ -383,15 +511,26 @@ export function ActivityPage({
 
             <div className="water-log-list">
               <h3>Water Entries</h3>
-              {waterSummary?.water_logs.length ? (
-                <ul>
-                  {waterSummary.water_logs.map((log) => (
-                    <li key={log.id}>
-                      <span>{log.amount} oz</span>
-                      <span>{new Date(log.created_at).toLocaleTimeString()}</span>
-                    </li>
-                  ))}
-                </ul>
+              {recentLog ? (
+                <div className="water-log-recent" tabIndex={0}>
+                  <p>
+                    Recent: <strong>{recentLog.amount} oz</strong> <span>{formatTimeAgo(recentLog.created_at)}</span>
+                  </p>
+
+                  {olderLogs.length > 0 && (
+                    <div className="water-log-hover-list" role="tooltip">
+                      <h4>Earlier Today</h4>
+                      <ul>
+                        {olderLogs.map((log) => (
+                          <li key={log.id}>
+                            <span>{log.amount} oz</span>
+                            <span>{formatTimeAgo(log.created_at)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <p>No water entries for this date yet.</p>
               )}
