@@ -25,6 +25,8 @@ DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
+    "http://bloom-app.life",
+    "https://bloom-app.life",
 ]
 
 ALLOWED_ORIGINS = parse_csv_env(os.environ.get("BLOOM_CORS_ORIGINS")) or DEFAULT_ALLOWED_ORIGINS
