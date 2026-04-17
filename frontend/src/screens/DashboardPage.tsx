@@ -226,7 +226,7 @@ export function DashboardPage({
             <article className="tasks-card">
               <h2>Today&apos;s Snapshot</h2>
               <ul>
-                <li>Plant stage: {dailySummary?.plant_stage ?? waterSummary?.plant_stage ?? 0}/4</li>
+                <li>Plant stage: {dailySummary?.plant_stage ?? waterSummary?.plant_stage ?? 0}/5</li>
                 <li>Moods logged: {dailySummary?.moods_logged ?? dailySummary?.moods?.length ?? 0}</li>
                 <li>Water entries: {waterSummary?.water_logs.length ?? 0}</li>
               </ul>

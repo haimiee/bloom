@@ -217,10 +217,12 @@ def get_plant_stage(percentage: float):
     later frontend can decide how many versions of the plant they want.
     """
     if percentage >= 1:
+        return 5
+    elif percentage >= 0.8:
         return 4
-    elif percentage >= 0.75:
+    elif percentage >= 0.6:
         return 3
-    elif percentage >= 0.5:
+    elif percentage >= 0.4:
         return 2
     elif percentage > 0:
         return 1

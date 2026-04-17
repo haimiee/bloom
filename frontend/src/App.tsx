@@ -6,6 +6,7 @@ import plantStage1Image from '../assets/images/plant/stage1.png'
 import plantStage2Image from '../assets/images/plant/stage2.png'
 import plantStage3Image from '../assets/images/plant/stage3.png'
 import plantStage4Image from '../assets/images/plant/stage4.png'
+import plantStage5Image from '../assets/images/plant/stage5.png'
 import LandingPage from './screens/LandingPage'
 import LoginPage from './screens/LoginPage'
 import SignupPage from './screens/SignupPage'
@@ -13,16 +14,20 @@ import AskMoodPage from './screens/AskMoodPage'
 import { ActivityPage, DashboardPage } from './screens/DashboardPage'
 import ProfilePage from './screens/ProfilePage'
 import AvatarEditorModal from './components/AvatarEditorModal'
+import BioEditorModal from './components/BioEditorModal'
 import AvatarPreview from './components/AvatarPreview'
 import { getDefaultAvatarSelection } from './avatar'
 import {
   AVATAR_ASSETS,
   AvatarLayerKey,
   AvatarSelection,
+  hasSavedBioForUser,
   isAvatarSetupDone,
   loadAvatarSelectionForUser,
   markAvatarSetupDone,
   saveAvatarSelectionForUser,
+  loadBioForUser,
+  saveBioForUser,
 } from './avatar'
 
 type AuthFieldErrors = {
@@ -103,6 +108,7 @@ const PLANT_STAGE_IMAGE_URLS: Record<number, string> = {
   2: import.meta.env.VITE_PLANT_STAGE_2_IMAGE_URL ?? plantStage2Image,
   3: import.meta.env.VITE_PLANT_STAGE_3_IMAGE_URL ?? plantStage3Image,
   4: import.meta.env.VITE_PLANT_STAGE_4_IMAGE_URL ?? plantStage4Image,
+  5: import.meta.env.VITE_PLANT_STAGE_5_IMAGE_URL ?? plantStage5Image,
 }
 const SIGNUP_ENDPOINT = import.meta.env.VITE_SIGNUP_ENDPOINT ?? '/auth/signup'
 const LOGIN_ENDPOINT = import.meta.env.VITE_LOGIN_ENDPOINT ?? '/auth/login'
@@ -280,7 +286,10 @@ function clampProgress(percentage: number) {
 }
 
 function getPlantStageLabel(stage: number) {
-  if (stage >= 4) {
+  if (stage >= 5) {
+    return 'Fully Bloomed'
+  }
+  if (stage === 4) {
     return 'Blooming'
   }
   if (stage === 3) {
@@ -425,6 +434,9 @@ function App() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [avatarSelection, setAvatarSelection] = useState<AvatarSelection>(() => getDefaultAvatarSelection())
   const [avatarModalMode, setAvatarModalMode] = useState<'onboarding' | 'editor' | null>(null)
+  const [bioText, setBioText] = useState('')
+  const [bioEditingMode, setBioEditingMode] = useState(false)
+  const [bioHasBeenEdited, setBioHasBeenEdited] = useState(false)
 
   const signupUrl = useMemo(() => getApiUrl(SIGNUP_ENDPOINT), [])
   const loginUrl = useMemo(() => getApiUrl(LOGIN_ENDPOINT), [])
@@ -481,6 +493,8 @@ function App() {
     if (!authUser?.userid) {
       setAvatarSelection(getDefaultAvatarSelection())
       setAvatarModalMode(null)
+      setBioText('')
+      setBioHasBeenEdited(false)
       setAskMoodOptions(DEFAULT_MOOD_OPTIONS)
       setAskMoodSelection(DEFAULT_MOOD_OPTIONS[0])
       setAskMoodHasHistory(false)
@@ -488,6 +502,8 @@ function App() {
     }
 
     setAvatarSelection(loadAvatarSelectionForUser(authUser.userid))
+    setBioText(loadBioForUser(authUser.userid))
+    setBioHasBeenEdited(hasSavedBioForUser(authUser.userid))
   }, [authUser?.userid])
 
   useEffect(() => {
@@ -994,6 +1010,26 @@ function App() {
     }
   }
 
+  function handleOpenBioEditor() {
+    setBioEditingMode(true)
+  }
+
+  function handleCloseBioEditor() {
+    setBioEditingMode(false)
+  }
+
+  function handleSaveBio(bio: string) {
+    if (!authUser?.userid) {
+      return
+    }
+
+    setBioText(bio)
+    setBioHasBeenEdited(true)
+    saveBioForUser(authUser.userid, bio)
+    setStatusMessage('Bio saved.')
+    setIsErrorMessage(false)
+  }
+
   function navigateTo(nextPage: Page, options?: { replace?: boolean; ignoreAuthGuard?: boolean }) {
     const guardedPage = options?.ignoreAuthGuard ? nextPage : guardPage(nextPage, Boolean(authUser))
     const targetHash = pageToHash(guardedPage)
@@ -1308,7 +1344,7 @@ function App() {
       <aside className="plant-panel">
         <h2>Your Plant</h2>
         <p className="plant-stage-text">
-          Stage {stage}/4: <strong>{getPlantStageLabel(stage)}</strong>
+          Stage {stage}/5: <strong>{getPlantStageLabel(stage)}</strong>
         </p>
 
         <div className="plant-visual" aria-label={`Plant stage ${stage}`}>
@@ -1356,6 +1392,17 @@ function App() {
         onChange={handleAvatarLayerChange}
         onSave={handleSaveAvatar}
         onClose={handleCloseAvatarModal}
+      />
+    )
+  }
+
+  function renderBioModal() {
+    return (
+      <BioEditorModal
+        open={bioEditingMode}
+        initialBio={bioText}
+        onSave={handleSaveBio}
+        onClose={handleCloseBioEditor}
       />
     )
   }
@@ -1430,8 +1477,6 @@ function App() {
     const username = getUserHandle(authUser?.email ?? '')
     const friendsCount = 0
     const longestStreak = getLongestActiveStreak(weekActivity)
-    const bioText =
-      'This is your profile space. In the next milestone, we can add custom bios and social features.'
 
     return (
       <>
@@ -1442,10 +1487,13 @@ function App() {
           friendsCount={friendsCount}
           longestStreak={longestStreak}
           bioText={bioText}
+          bioIsDefault={!bioHasBeenEdited}
           avatar={avatarSelection}
           onEditAvatar={handleOpenAvatarEditor}
+          onEditBio={handleOpenBioEditor}
         />
         {renderAvatarModal()}
+        {renderBioModal()}
       </>
     )
   }

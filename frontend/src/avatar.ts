@@ -18,6 +18,8 @@ const AVATAR_IMAGE_MODULES = import.meta.glob('../assets/images/avatar/*.png', {
 const LAYER_KEYS: AvatarLayerKey[] = ['hairBack', 'body', 'eyes', 'pants', 'shirt', 'shoes', 'hairFront']
 const AVATAR_STORAGE_PREFIX = 'bloom_avatar_v1:'
 const AVATAR_SETUP_PREFIX = 'bloom_avatar_setup_done:'
+const BIO_STORAGE_PREFIX = 'bloom_bio:'
+export const DEFAULT_BIO = 'This space intentionally left blank for future floral arrangements.'
 
 function compareNaturally(a: string, b: string) {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
@@ -139,4 +141,32 @@ export function isAvatarSetupDone(userid: number) {
 
 export function markAvatarSetupDone(userid: number) {
   localStorage.setItem(`${AVATAR_SETUP_PREFIX}${userid}`, '1')
+}
+
+export function loadBioForUser(userid: number): string {
+  try {
+    const bio = localStorage.getItem(`${BIO_STORAGE_PREFIX}${userid}`)
+    if (!bio) {
+      return DEFAULT_BIO
+    }
+    return bio
+  } catch {
+    return DEFAULT_BIO
+  }
+}
+
+export function saveBioForUser(userid: number, bio: string) {
+  try {
+    localStorage.setItem(`${BIO_STORAGE_PREFIX}${userid}`, bio)
+  } catch {
+    // Ignore storage errors in restricted browser modes.
+  }
+}
+
+export function hasSavedBioForUser(userid: number) {
+  try {
+    return localStorage.getItem(`${BIO_STORAGE_PREFIX}${userid}`) !== null
+  } catch {
+    return false
+  }
 }

@@ -2184,6 +2184,16 @@
   font-family: 'Space Mono', 'Consolas', monospace;
 }
 
+.profile-bio-text {
+  color: #1e5273;
+  line-height: 1.6;
+}
+
+.profile-bio-text.is-default {
+  color: rgba(30, 82, 115, 0.55);
+  font-style: italic;
+}
+
 .profile-edit-btn {
   border: 2px solid #00204f;
   background: linear-gradient(180deg, #afd9ff, #74b5e0);
@@ -2213,6 +2223,104 @@
 
 .panel-pop-in {
   animation: panel-pop-in 320ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+/* Bio Editor Modal */
+.bio-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(5, 26, 53, 0.58);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.bio-modal {
+  width: min(600px, 94vw);
+  max-height: calc(100dvh - 40px);
+  background: #fffff8;
+  border: 3px solid var(--ink);
+  box-shadow: 11px 11px 0 #1e5273;
+  padding: 20px;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.bio-modal h2 {
+  margin: 0;
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  font-size: clamp(0.9rem, 1.8vw, 1.2rem);
+  line-height: 1.5;
+}
+
+.bio-modal-subtext {
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  opacity: 0.8;
+}
+
+.bio-modal-close {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--ink);
+  background: #e8e0d0;
+  box-shadow: 3px 3px 0 rgba(30, 82, 115, 0.35);
+  font-family: 'Space Mono', 'Consolas', monospace;
+  cursor: pointer;
+}
+
+.bio-modal-layout {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.bio-editor-input {
+  border: 2px solid var(--ink);
+  background: #f8faf7;
+  box-shadow: inset 0 0 0 2px rgba(30, 82, 115, 0.15);
+  padding: 12px;
+  font-family: 'Space Mono', 'Consolas', monospace;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 120px;
+  max-height: 240px;
+  color: #1e5273;
+}
+
+.bio-editor-input::placeholder {
+  color: #1e5273;
+  opacity: 0.6;
+}
+
+.bio-editor-input:focus {
+  outline: 2px solid #c5dcaf;
+  outline-offset: -4px;
+}
+
+.bio-char-count {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  opacity: 0.7;
+  font-family: 'Space Mono', 'Consolas', monospace;
+}
+
+.bio-modal-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 @media (max-width: 1020px) {

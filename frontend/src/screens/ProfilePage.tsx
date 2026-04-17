@@ -9,8 +9,10 @@ type ProfilePageProps = {
   friendsCount: number
   longestStreak: number
   bioText: string
+  bioIsDefault: boolean
   avatar: AvatarSelection
   onEditAvatar: () => void
+  onEditBio: () => void
 }
 
 export default function ProfilePage({
@@ -20,8 +22,10 @@ export default function ProfilePage({
   friendsCount,
   longestStreak,
   bioText,
+  bioIsDefault,
   avatar,
   onEditAvatar,
+  onEditBio,
 }: ProfilePageProps) {
   return (
     <div className="dashboard-page screen-fade-in profile-page-root">
@@ -65,8 +69,8 @@ export default function ProfilePage({
             <h2>Bio</h2>
           </div>
           <div className="profile-bio-box">
-            <p>{bioText}</p>
-            <button type="button" className="profile-edit-btn floating" aria-label="Edit bio" disabled>
+            <p className={bioIsDefault ? 'profile-bio-text is-default' : 'profile-bio-text'}>{bioText}</p>
+            <button type="button" className="profile-edit-btn floating" onClick={onEditBio} aria-label="Edit bio">
               ✎
             </button>
           </div>
