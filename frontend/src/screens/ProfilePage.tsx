@@ -36,19 +36,6 @@ export default function ProfilePage({
           </div>
         </section>
 
-        <section className="profile-photo-card" aria-label="Profile photo">
-          <button
-            type="button"
-            className="profile-edit-btn floating-top-left"
-            onClick={onEditAvatar}
-            aria-label="Edit avatar"
-          >
-            ✎
-          </button>
-
-          <AvatarPreview avatar={avatar} className="avatar-preview-profile-head avatar-preview-headshot" />
-        </section>
-
         <section className="profile-stats-row" aria-label="Profile statistics">
           <article className="profile-stat-box">
             <h2>Friends</h2>

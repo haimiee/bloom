@@ -2046,8 +2046,8 @@
   grid-template-columns: 280px 1fr;
   grid-template-areas:
     "banner banner"
-    "headshot stats"
-    "avatar bio";
+    "avatar stats"
+    "bio bio";
   gap: 14px;
 }
 
@@ -2069,8 +2069,11 @@
 .profile-banner h1 {
   margin: 0;
   font-family: 'Press Start 2P', 'Courier New', monospace;
-  font-size: clamp(1.35rem, 4vw, 3rem);
+  font-size: clamp(1.1rem, 3.2vw, 2.4rem);
   line-height: 1.25;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .profile-banner p {
@@ -2170,6 +2173,10 @@
 
 .profile-bio-box {
   padding: 14px;
+}
+
+.profile-avatar-panel .profile-avatar-thumbnail {
+  min-height: 280px;
 }
 
 .profile-bio-box p {
@@ -2316,7 +2323,8 @@
   }
 
   .profile-name {
-    max-width: 90px;
+    max-width: 70px;
+    font-size: 0.74rem;
   }
 
   .hydration-playground {
@@ -2397,10 +2405,14 @@
     grid-template-columns: 1fr;
     grid-template-areas:
       "banner"
-      "headshot"
-      "stats"
       "avatar"
+      "stats"
       "bio";
+  }
+
+  .profile-banner h1 {
+    font-size: clamp(0.95rem, 6.2vw, 1.4rem);
+    line-height: 1.3;
   }
 
   .profile-stats-row {
