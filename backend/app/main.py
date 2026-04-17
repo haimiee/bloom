@@ -26,10 +26,13 @@ DEFAULT_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
     "http://bloom-app.life",
+    "http://bloom-app.life:80",
     "https://bloom-app.life",
+    "https://bloom-app.life:443",
 ]
 
-ALLOWED_ORIGINS = parse_csv_env(os.environ.get("BLOOM_CORS_ORIGINS")) or DEFAULT_ALLOWED_ORIGINS
+env_allowed_origins = parse_csv_env(os.environ.get("BLOOM_CORS_ORIGINS"))
+ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ALLOWED_ORIGINS + env_allowed_origins))
 
 app.add_middleware(
     CORSMiddleware,
