@@ -136,18 +136,25 @@ export default function AvatarEditorModal({
             )}
 
             <div className="avatar-options-grid">
-              {activeOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={`avatar-option ${selectedOptionId === option.id ? 'is-selected' : ''}`}
-                  onClick={() => handleOptionClick(option.id)}
-                  aria-label={`Select ${option.id}`}
-                  title={option.id}
-                >
-                  <img src={option.src} alt="" aria-hidden="true" className="avatar-option-image" draggable={false} />
-                </button>
-              ))}
+              {activeOptions.map((option) => {
+                const isNoneOption = option.id.endsWith('-none')
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`avatar-option ${selectedOptionId === option.id ? 'is-selected' : ''} ${isNoneOption ? 'avatar-option-none' : ''}`}
+                    onClick={() => handleOptionClick(option.id)}
+                    aria-label={`Select ${option.id}`}
+                    title={option.id}
+                  >
+                    {isNoneOption ? (
+                      <span className="avatar-option-none-symbol" aria-hidden="true">✕</span>
+                    ) : (
+                      <img src={option.src} alt="" aria-hidden="true" className="avatar-option-image" draggable={false} />
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>

@@ -1987,6 +1987,17 @@
   image-rendering: auto;
 }
 
+.avatar-option-none {
+  background: #f3f4ef;
+}
+
+.avatar-option-none-symbol {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1;
+}
+
 .avatar-modal-actions {
   margin-top: 14px;
   display: flex;

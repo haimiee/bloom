@@ -57,6 +57,23 @@ function buildAvatarAssets(): AvatarAssets {
     assets[layer].sort((left, right) => compareNaturally(left.id, right.id))
   }
 
+  // Add "no hair" option as the first option for hair layers
+  if (assets.hairBack.length > 0) {
+    assets.hairBack.unshift({
+      id: 'hairBack-none',
+      src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      label: 'None',
+    })
+  }
+
+  if (assets.hairFront.length > 0) {
+    assets.hairFront.unshift({
+      id: 'hairFront-none',
+      src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      label: 'None',
+    })
+  }
+
   return assets
 }
 
@@ -75,6 +92,11 @@ export function getDefaultAvatarSelection(): AvatarSelection {
 }
 
 export function getAvatarLayerSrc(layer: AvatarLayerKey, avatar: AvatarSelection) {
+  // Don't render "none" options (no hair)
+  if (avatar[layer].endsWith('-none')) {
+    return ''
+  }
+
   const option = AVATAR_ASSETS[layer].find((item) => item.id === avatar[layer])
   return option?.src ?? ''
 }
