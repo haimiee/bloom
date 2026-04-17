@@ -1,4 +1,5 @@
 import type { FormEvent, ReactNode } from 'react'
+import signupLotusImage from '../../assets/images/signuppage/lotus.png'
 
 type FieldErrors = {
   name?: string
@@ -45,7 +46,7 @@ export default function SignupPage({
     <div className="auth-page">
       <div className="auth-layout">
         <aside className="art-panel" aria-hidden="true">
-          <div className="sprite-placeholder" />
+          <img className="signup-lotus-image" src={signupLotusImage} alt="" draggable={false} />
         </aside>
         <section className="form-shell" aria-labelledby="signup-title">
           {topBarNode}
