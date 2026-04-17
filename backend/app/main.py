@@ -397,6 +397,25 @@ def get_mood_logs_for_day(day_string: str, userid: int):
 
     return [dict(row) for row in rows]
 
+def parse_log_timestamp(timestamp: str | None):
+    """Normalize stored timestamps so naive and aware values compare safely."""
+    if not timestamp:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+    normalized = timestamp.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=EASTERN_TZ)
+
+    return parsed.astimezone(EASTERN_TZ)
+
 def get_latest_water_log(userid: int):
     conn = get_connection()
     cursor = conn.cursor()
@@ -431,8 +450,8 @@ def get_community_feed(current_userid: int):
 
         latest_entry = None
         if latest_water and latest_mood:
-            water_time = datetime.fromisoformat(latest_water["created_at"])
-            mood_time = datetime.fromisoformat(latest_mood["created_at"])
+            water_time = parse_log_timestamp(latest_water["created_at"])
+            mood_time = parse_log_timestamp(latest_mood["created_at"])
             latest_entry = ("water", latest_water) if water_time >= mood_time else ("mood", latest_mood)
         elif latest_water:
             latest_entry = ("water", latest_water)
@@ -460,7 +479,7 @@ def get_community_feed(current_userid: int):
             }
         )
 
-    entries.sort(key=lambda item: item["created_at"], reverse=True)
+    entries.sort(key=lambda item: parse_log_timestamp(item.get("created_at")), reverse=True)
     return entries
 
 # combined summary logic
