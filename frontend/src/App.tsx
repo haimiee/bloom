@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import './App.css'
+import bloomLogo from '../assets/images/logo/bloomlogo.png'
 import landingLandscapeGif from '../assets/images/landingpage/landscape.gif'
 import plantStage1Image from '../assets/images/plant/stage1.png'
 import plantStage2Image from '../assets/images/plant/stage2.png'
@@ -436,6 +437,23 @@ function App() {
   const avatarUrl = useMemo(() => getApiUrl(AVATAR_ENDPOINT), [])
   const sessionUrl = useMemo(() => getApiUrl(SESSION_ENDPOINT), [])
   const logoutUrl = useMemo(() => getApiUrl(LOGOUT_ENDPOINT), [])
+
+  useEffect(() => {
+    document.title = 'Bloom'
+
+    const existingFavicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+    if (existingFavicon) {
+      existingFavicon.href = bloomLogo
+      existingFavicon.type = 'image/png'
+      return
+    }
+
+    const favicon = document.createElement('link')
+    favicon.rel = 'icon'
+    favicon.type = 'image/png'
+    favicon.href = bloomLogo
+    document.head.appendChild(favicon)
+  }, [])
 
   function applySummaryState(summary: DailySummaryResponse) {
     setDailySummary(summary)

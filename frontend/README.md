@@ -17,9 +17,9 @@ Used by this app:
 
 ## Local Example
 
-Use the backend on port 8000:
+Use the backend on the current host at port 8000. If you do not set `VITE_API_BASE_URL`, the frontend already defaults to `window.location.hostname:8000`.
 
-VITE_API_BASE_URL=http://127.0.0.1:8000
+# VITE_API_BASE_URL=http://your-domain.com:8000
 VITE_SIGNUP_ENDPOINT=/auth/signup
 VITE_LOGIN_ENDPOINT=/auth/login
 VITE_WATER_ENDPOINT=/water
