@@ -46,6 +46,7 @@ SESSION_COOKIE_SECURE = os.environ.get("BLOOM_SESSION_COOKIE_SECURE", "false").l
 SESSION_COOKIE_SAMESITE = os.environ.get("BLOOM_SESSION_COOKIE_SAMESITE", "lax").lower()
 if SESSION_COOKIE_SAMESITE not in {"lax", "strict", "none"}:
     SESSION_COOKIE_SAMESITE = "lax"
+DEFAULT_MOOD_OPTIONS = ["Happy", "Calm", "Focused", "Excited", "Tired", "Stressed"]
 try:
     EASTERN_TZ = ZoneInfo("America/New_York")
 except ZoneInfoNotFoundError:
@@ -107,6 +108,15 @@ def init_db():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS mood_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            userid INTEGER NOT NULL,
+            mood TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_mood_options (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             userid INTEGER NOT NULL,
             mood TEXT NOT NULL,
@@ -300,6 +310,14 @@ def create_user(name: str, email: str, password_hash: str, avatar_json: str = "{
     )
     conn.commit()
     user_id = cursor.lastrowid
+
+    for mood in DEFAULT_MOOD_OPTIONS:
+        cursor.execute(
+            "INSERT INTO user_mood_options (userid, mood, created_at) VALUES (?, ?, ?)",
+            (user_id, mood, get_eastern_now().isoformat()),
+        )
+
+    conn.commit()
     conn.close()
     return user_id
 
@@ -382,6 +400,55 @@ def create_mood_log(mood: str, userid: int):
 
     conn.commit()
     conn.close()
+
+def add_mood_option(userid: int, mood: str):
+    normalized = mood.strip()
+    if not normalized:
+        return
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT 1 FROM user_mood_options WHERE userid = ? AND lower(mood) = lower(?) LIMIT 1",
+        (userid, normalized),
+    )
+    exists = cursor.fetchone() is not None
+
+    if not exists:
+        cursor.execute(
+            "INSERT INTO user_mood_options (userid, mood, created_at) VALUES (?, ?, ?)",
+            (userid, normalized, get_eastern_now().isoformat()),
+        )
+        conn.commit()
+
+    conn.close()
+
+def get_user_mood_options(userid: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT mood FROM user_mood_options WHERE userid = ? ORDER BY created_at ASC, id ASC",
+        (userid,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    options = [str(row["mood"]).strip() for row in rows if str(row["mood"]).strip()]
+    if options:
+        return options
+
+    return DEFAULT_MOOD_OPTIONS.copy()
+
+def user_has_mood_history(userid: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT 1 FROM mood_logs WHERE userid = ? LIMIT 1",
+        (userid,),
+    )
+    has_history = cursor.fetchone() is not None
+    conn.close()
+    return has_history
 
 def get_mood_logs_for_day(day_string: str, userid: int):
     conn = get_connection()
@@ -552,12 +619,22 @@ def login(entry: LoginEntry, response: Response):
     }
 
 @app.get("/auth/session")
-def get_session_user(userid: int = Depends(get_authenticated_userid)):
+def get_session_user(request: Request):
+    auth_cookie = request.cookies.get(AUTH_COOKIE_NAME)
+    if not auth_cookie:
+        return {"authenticated": False}
+
+    try:
+        userid = verify_session_token(auth_cookie)
+    except HTTPException:
+        return {"authenticated": False}
+
     user = get_user_by_id(userid)
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid authentication.")
+        return {"authenticated": False}
 
     return {
+        "authenticated": True,
         "userid": user["id"],
         "name": user["name"],
         "email": user["email"],
@@ -581,7 +658,16 @@ def get_water(date_str: str | None = Query(default=None, alias="date"), userid: 
 @app.post("/mood")
 def log_mood(entry: LogMoodRequest, userid: int = Depends(get_authenticated_userid)):
     create_mood_log(entry.mood, userid)
+    add_mood_option(userid, entry.mood)
     return LogMoodResponse(entry.mood, userid)
+
+@app.get("/mood-options")
+def get_mood_options(userid: int = Depends(get_authenticated_userid)):
+    return {
+        "userid": userid,
+        "options": get_user_mood_options(userid),
+        "has_history": user_has_mood_history(userid),
+    }
 
 @app.post("/avatar")
 def save_avatar(entry: AvatarEntry, userid: int = Depends(get_authenticated_userid)):
